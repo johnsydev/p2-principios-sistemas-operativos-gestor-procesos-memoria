@@ -80,7 +80,6 @@ public class MiniPCController {
 
         // Muestra GUI
         this.vista.setVisible(true);
-        vista.getTxtTeclado().setEnabled(false);
         abrirConfiguracion();
     }
 
@@ -167,56 +166,6 @@ public class MiniPCController {
             @Override
             public void actionPerformed(ActionEvent e) {
                 reiniciarSistema();
-            }
-        });
-
-        vista.getTxtTeclado().addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                String textoIngresado = vista.getTxtTeclado().getText().trim();
-                
-                if (textoIngresado.isEmpty()) {
-                    return;
-                }
-
-                // buscar proceso blocked
-                Process procesoBloqueado = processList.getFirstProcess(); //siempre va a ser el primero en este proyecto
-
-                if (procesoBloqueado != null) {
-                    try {
-                        int valor = Integer.parseInt(textoIngresado);
-                        int ticks = LocalDateTime.now().getSecond() - startTimeInput.getSecond();
-                        procesoBloqueado.getPCB().setTimeSpent(procesoBloqueado.getPCB().getTimeSpent() + ticks);
-                        vista.getTxtPantalla().append("> " + valor + "\n");
-
-                        vista.getTxtTeclado().setEnabled(false);
-                        startTimeInput = null;
-                        try {
-                            interruptHandler.handleInterruptIOInput(procesoBloqueado, valor);
-                        }
-                        catch (Exception ex) {
-                            vista.getTxtPantalla().append("[PID " + procesoBloqueado.getPCB().getPID() + "]: " + ex.getMessage() + "\n");
-                            terminateCurrentProcess(ex.getMessage());
-                        }
-                        
-
-                    } catch (NumberFormatException ex) {
-                        vista.mostrarError("Debe ingresar un número entero válido.");
-                        return;
-                    }
-                } else {
-                    //vista.getTxtPantalla().append("> " + textoIngresado + "\n");
-                    vista.mostrarError("No hay un proceso bloqueado esperando entrada.");
-                    return;
-                }
-
-                vista.getTxtTeclado().setText("");
-                actualizarVistaListaProcesos();
-                actualizarVistaCPU();
-
-                if (autoExecute) {
-                    ejecutarTodoPrograma();
-                }
             }
         });
 
@@ -498,14 +447,16 @@ public class MiniPCController {
         }
 
         // Input
+        /* 
         if (currentProcess.getState() == ProcessState.BLOCKED && this.interruptHandler.hasPendingInput()) {
             this.startTimeInput = LocalDateTime.now();
             actualizarVistaListaProcesos();
             actualizarVistaCPU();
-            vista.getTxtTeclado().setEnabled(true);
-            vista.getTxtTeclado().requestFocusInWindow();
+            //vista.getTxtTeclado().setEnabled(true);
+            //vista.getTxtTeclado().requestFocusInWindow();
             return;
         }
+        */
 
         // Output
         if (this.interruptHandler.hasPendingOutput()) {
