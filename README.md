@@ -6,7 +6,10 @@
 
 ## Información del proyecto
 
-**Estudiante:** 2024178835 - Johnsy Steven López Aguilar  
+**Estudiantes:** 
+
+2024178835 - Johnsy Steven López Aguilar  
+2023344598 - Sergio Montoya Badilla
 
 **Curso:** Principios de Sistemas Operativos  
 
@@ -246,8 +249,6 @@ De esta manera se puede analizar en detalle el ciclo de búsqueda y ejecución d
 
 La opción **Ejecutar todo** procesa automáticamente las instrucciones de forma secuencial y continua.
 
-Si una instrucción requiere entrada por teclado (interrupción `INT 09H`), la ejecución automática se pausará, el proceso pasará al estado `BLOCKED` y la interfaz habilitará el campo de entrada correspondiente. Una vez ingresado el dato, el proceso regresará a `READY` y la ejecución continuará automáticamente.
-
 Al finalizar todos los procesos, el simulador muestra un panel de **Estadísticas**, detallando los tiempos de llegada, ejecución y finalización (expresados en *ticks* del reloj del sistema) de cada proceso.
 
 ---
@@ -342,7 +343,7 @@ t1-principios-sistemas-operativos-mini-pc/
 | `Scheduler.java` | Modelo | Implementa el planificador a largo y mediano plazo utilizando la política FCFS. Decide si un trabajo entra a la RAM o pasa a la Memoria Virtual (`READY_SUSPENDED`), y gestiona el swap cuando se libera RAM. |
 | `Dispatcher.java` | Modelo | Encargado del cambio de contexto. Restaura los registros del CPU con los datos del BCP del proceso entrante y guarda el estado al pausar o suspender. |
 | `Loader.java` | Modelo | Copia el código fuente traducido al Disco, crea su entrada en el Índice de Archivos y realiza la carga de instrucciones hacia la RAM o la Memoria Virtual según disponga el Scheduler. |
-| `InterruptHandler.java` | Modelo | Atiende las interrupciones de software y de I/O (`INT 09H`, `INT 10H`, `INT 20H`, `INT 21H`), pausando la ejecución cuando se requiere entrada del usuario o gestionando llamadas al sistema de archivos. |
+| `InterruptHandler.java` | Modelo | Atiende las interrupciones de software y de I/O (`INT 10H`, `INT 20H`, `INT 21H`), pausando la ejecución cuando se requiere entrada del usuario o gestionando llamadas al sistema de archivos. |
 | `FileSystem.java` | Modelo | Modela el sistema de archivos sobre el Disco simulado. Permite crear, abrir, escribir, leer y cerrar archivos mediante llamadas al sistema. |
 | `FileIndex.java` | Modelo | Gestiona la tabla de metadatos del Disco (índice de archivos), registrando nombres, tamaños y direcciones iniciales de los archivos almacenados. |
 | `SystemClock.java` | Modelo | Simula el reloj del sistema, incrementando los *ticks* de tiempo en cada ciclo para medir la duración de los procesos. |
@@ -385,7 +386,6 @@ Durante el **EXECUTE**, el procesador interpreta la instrucción y ejecuta la op
 
 Si la CPU encuentra una instrucción de interrupción (`INT`), delega la atención al `InterruptHandler`:
 
-* **`INT 09H` (Entrada por teclado):** Cambia el estado del proceso a `BLOCKED`, pausa la CPU y habilita la caja de texto en la GUI. Cuando el usuario ingresa el dato, la interrupción guarda el valor en el registro `AH` (o en la celda correspondiente), cambia el proceso a `READY` y la ejecución puede continuar.
 * **`INT 10H` (Salida en pantalla):** Muestra el valor almacenado en los registros directamente en la consola visual de la GUI.
 * **`INT 20H` (Terminar programa):** Finaliza el proceso, calcula sus estadísticas finales de tiempo y marca su estado como `EXIT`.
 * **`INT 21H` (Sistema de Archivos):** Permite interactuar con el `FileSystem` para crear (`AH=3CH`), abrir (`AH=3DH`), escribir (`AH=40H`), leer (`AH=41H`) o cerrar (`AH=4DH`) archivos en el disco simulado.
@@ -441,7 +441,7 @@ El ciclo de vida de un proceso pasa por los siguientes estados:
 * **READY:** El proceso está cargado en la memoria RAM y espera su turno en la CPU.
 * **READY_SUSPENDED:** El proceso fue admitido, pero sus instrucciones se guardaron en la Memoria Virtual a la espera de espacio libre en RAM.
 * **RUNNING:** El proceso tiene el control de la CPU y sus instrucciones están siendo ejecutadas.
-* **BLOCKED:** El proceso se pausó a la espera de una entrada por teclado (`INT 09H`).
+* **BLOCKED:** El proceso se pausó a la espera de una entrada I/O.
 * **BLOCKED_SUSPENDED:** El proceso se pausó a la espera de espacio libre en RAM, pero sus instrucciones se guardaron en la Memoria Virtual a la espera de espacio libre en RAM.
 * **EXIT:** El proceso terminó su ejecución, liberó su espacio en memoria y guardó sus estadísticas finales.
 
@@ -462,7 +462,7 @@ Antes de almacenar un programa en el Disco, el archivo `.asm` es validado por la
 Entre las comprobaciones realizadas se incluyen:
 
 * Sintaxis correcta de las instrucciones tradicionales (`MOV`, `ADD`, `SUB`, `JMP`, `CMP`, etc.).
-* Validación de las nuevas instrucciones e interrupciones (`INT 09H`, `INT 10H`, `INT 20H`, `INT 21H`, `PUSH`, `POP`, etc.).
+* Validación de las nuevas instrucciones e interrupciones (`INT 10H`, `INT 20H`, `INT 21H`, `PUSH`, `POP`, etc.).
 * Verificación del número y tipo de operandos permitidos (registros, constantes o direcciones).
 * Verificación de rangos numéricos permitidos para evitar valores fuera de límite.
 * Eliminación y descarte automático de líneas vacías o comentarios.

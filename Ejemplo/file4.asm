@@ -20,7 +20,6 @@ MOV DX, "prueba.txt"
 MOV AH, 4dh
 INT 21H
 
-INT 09H
 ADD AX
 STORE CX
 LOAD CX

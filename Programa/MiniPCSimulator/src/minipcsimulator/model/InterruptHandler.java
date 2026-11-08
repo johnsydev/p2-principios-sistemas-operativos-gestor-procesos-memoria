@@ -47,13 +47,7 @@ public class InterruptHandler {
     }
 
     public void handleInterruptIO(CPU cpu, String ioType) {
-        if (ioType.equals("INPUT")) {
-
-            cpu.getPCB().setState(Process.ProcessState.BLOCKED);
-            this.hasPendingInput = true;
-            Dispatcher.saveContext(processList.getFirstProcess(), cpu, memory);
-
-        } else if (ioType.equals("OUTPUT")) {
+        if (ioType.equals("OUTPUT")) {
 
             this.bufferOutput = cpu.getPCB().getDX() + "\n";
             this.hasPendingOutput = true;

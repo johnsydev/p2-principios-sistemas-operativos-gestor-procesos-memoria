@@ -111,7 +111,7 @@ public class AsmParser {
         ));
 
         ArrayList<String> validInterrupts = new ArrayList<>(Arrays.asList(
-            "20H", "10H", "09H", "21H"
+            "20H", "10H", "21H"
         ));
 
         ArrayList<String> validHexInterrupts = new ArrayList<>(Arrays.asList(

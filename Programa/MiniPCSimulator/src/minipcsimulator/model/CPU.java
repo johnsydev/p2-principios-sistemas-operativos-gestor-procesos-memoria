@@ -13,23 +13,22 @@ public class CPU {
     // Codigos de operación
     public enum OpCode {
         // Instrucciones
-        LOAD(1, "INSTRUCTION", 2), 
-        STORE(2, "INSTRUCTION", 2), 
+        LOAD(1, "INSTRUCTION", 1), 
+        STORE(2, "INSTRUCTION", 1), 
         MOV(3, "INSTRUCTION", 1),
-        ADD(4, "INSTRUCTION", 3), 
-        SUB(5, "INSTRUCTION", 3), 
+        ADD(4, "INSTRUCTION", 1), 
+        SUB(5, "INSTRUCTION", 1), 
         INC(6, "INSTRUCTION", 1),
         DEC(7, "INSTRUCTION", 1),
         SWAP(8, "INSTRUCTION", 1),
-        INT_20H(9, "INSTRUCTION", 2),
-        INT_10H(10, "INSTRUCTION", 2),
-        INT_09H(11, "INSTRUCTION", 1), //peso depende
-        INT_21H(12, "INSTRUCTION", 5),
-        JMP(13, "INSTRUCTION", 2),
-        CMP(14, "INSTRUCTION", 2),
-        JE(15, "INSTRUCTION", 2),
-        JNE(16, "INSTRUCTION", 2),
-        PARAM(17, "INSTRUCTION", 3),
+        INT_20H(9, "INSTRUCTION", 1),
+        INT_10H(10, "INSTRUCTION", 1),
+        INT_21H(12, "INSTRUCTION", 1),
+        JMP(13, "INSTRUCTION", 1),
+        CMP(14, "INSTRUCTION", 1),
+        JE(15, "INSTRUCTION", 1),
+        JNE(16, "INSTRUCTION", 1),
+        PARAM(17, "INSTRUCTION", 1),
         PUSH(18, "INSTRUCTION", 1),
         POP(19, "INSTRUCTION", 1),
 
@@ -198,7 +197,6 @@ public class CPU {
         String instructionType = IR.getInstructionType();
         if (instructionType.equals("INT")) {
             String op = IR.getOperand(0).toUpperCase().trim();
-            if (op.equals("9H")) op = "09H";
             instructionType = "INT_" + op;
         }
         System.out.println("CPU: Ejecutando instrucción " + instructionType + " con operandos: " + IR.getOperands());
@@ -304,9 +302,6 @@ public class CPU {
                 break;
             case INT_10H:
                 executeINT_10H();               
-                break;
-            case INT_09H:
-                executeINT_09H();
                 break;
             case INT_21H:
                 executeINT_21H();
@@ -767,20 +762,6 @@ public class CPU {
         interruptHandler.handleInterruptIO(this, "OUTPUT");
     }
 
-    //input
-    public void executeINT_09H() {
-        if (pcb != null) {
-            pcb.setPC(this.PC);
-            pcb.setAC(this.AC);
-            pcb.setAX(this.AX);
-            pcb.setBX(this.BX);
-            pcb.setCX(this.CX);
-            pcb.setDX(this.DX);
-            pcb.setPSW(this.PSW);
-        }
-        interruptHandler.handleInterruptIO(this, "INPUT");
-    }
-
     // file manager
     public void executeINT_21H() {
         int op = getAH();
@@ -820,7 +801,6 @@ public class CPU {
             String instructionType = IR.getInstructionType();
             if (instructionType.equals("INT")) {
                 String op = IR.getOperand(0).toUpperCase().trim();
-                if (op.equals("9H")) op = "09H";
                 instructionType = "INT_" + op;
             }
             OpCode opcode = OpCode.getByCode(instructionType);
@@ -828,7 +808,7 @@ public class CPU {
             if (opcode != null) {
                 ticksRemaining = opcode.weight;
 
-                if (opcode == OpCode.INT_20H || opcode == OpCode.INT_10H || opcode == OpCode.INT_09H || opcode == OpCode.INT_21H) { //PENDIENTE
+                if (opcode == OpCode.INT_20H || opcode == OpCode.INT_10H || opcode == OpCode.INT_21H) { //PENDIENTE
                     pcb.setState(Process.ProcessState.BLOCKED);
                 }
             } else {
