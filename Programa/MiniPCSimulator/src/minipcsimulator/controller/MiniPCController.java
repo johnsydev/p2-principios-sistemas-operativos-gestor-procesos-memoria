@@ -31,6 +31,8 @@ import minipcsimulator.model.Scheduler;
 import minipcsimulator.model.FileSystem;
 import minipcsimulator.model.SystemClock;
 import minipcsimulator.model.PCB;
+import minipcsimulator.model.ArrivalQueue;
+import minipcsimulator.model.ArrivalQueue.PendingProgram;
 import minipcsimulator.services.AsmParser;
 import minipcsimulator.services.FileManager;
 import minipcsimulator.utils.SystemConfig;
@@ -51,6 +53,7 @@ public class MiniPCController {
     private Scheduler scheduler;
     private InterruptHandler interruptHandler;
     private FileSystem fileSystem;
+    private ArrivalQueue arrivalQueue;
     
     //hora de inicio
     private LocalDateTime startTimeSimulation;
@@ -75,6 +78,7 @@ public class MiniPCController {
         this.fileSystem = new FileSystem(this.disk);
         this.interruptHandler = new InterruptHandler(this.memory, this.processList, this.scheduler, this.fileSystem);
         this.cpu = new CPU(this.memory, interruptHandler);
+        this.arrivalQueue = new ArrivalQueue();
 
         agregarListeners();
 
@@ -175,6 +179,41 @@ public class MiniPCController {
                 finalizarSimulacion();
             }
         });
+
+        // Botón para asignar tiempos de llegada
+        vista.getBtnTiemposLlegada().addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                asignarTiemposLlegada();
+            }
+        });
+    }
+
+    /**
+     * Valida la sintaxis y el tamaño de un archivo .asm.
+     * @return las instrucciones parseadas, o null si el archivo tiene errores
+     */
+    private ArrayList<ArrayList<String>> validarSintaxis(String fileName, ArrayList<String> lines) {
+        ArrayList<ArrayList<String>> asmArray;
+
+        try {
+            asmArray = AsmParser.verifySyntax(lines);
+        } catch (Exception exc) {
+            vista.mostrarError(fileName + ": " + exc.getMessage());
+            return null;
+        }
+
+        if (asmArray.isEmpty()) {
+            vista.mostrarError("El archivo " + fileName + " está vacío o no contiene instrucciones válidas.");
+            return null;
+        }
+
+        if (asmArray.size() > SystemConfig.getUserMemorySize()) {
+            vista.mostrarError("El programa " + fileName + " ingresado es demasiado grande para la memoria disponible. Tamaño máximo permitido: " + SystemConfig.getUserMemorySize() + " instrucciones.");
+            return null;
+        }
+
+        return asmArray;
     }
 
     /**
@@ -196,22 +235,8 @@ public class MiniPCController {
             return;
         }
         
-        ArrayList<ArrayList<String>> asmArray = new ArrayList<>();
-        
-        try {
-            asmArray = AsmParser.verifySyntax(lines);
-        } catch (Exception exc) {
-            vista.mostrarError(exc.getMessage());
-            return;
-        }
-
-        if (asmArray.isEmpty()) {
-            vista.mostrarError("El archivo + " + fileName + " está vacío o no contiene instrucciones válidas.");
-            return;
-        }
-
-        if (asmArray.size() > SystemConfig.getUserMemorySize()) {
-            vista.mostrarError("El programa " + fileName + " ingresado es demasiado grande para la memoria disponible. Tamaño máximo permitido: " + SystemConfig.getUserMemorySize() + " instrucciones.");
+        ArrayList<ArrayList<String>> asmArray = validarSintaxis(fileName, lines);
+        if (asmArray == null) {
             return;
         }
 
@@ -275,9 +300,29 @@ public class MiniPCController {
             return;
         }
 
+        int numCPUs = SystemConfig.getNumCPUs();
+
         for (Map.Entry<ArrayList<String>, ArrayList<String>> fileData : filesData) {
-            procesarArchivo(fileData);
+            String fileName = fileData.getKey().get(1);
+            ArrayList<ArrayList<String>> asmArray = validarSintaxis(fileName, fileData.getValue());
+
+            if (asmArray == null) {
+                continue; // tiene errores entonces no se agrega
+            }
+
+            PendingProgram program = new PendingProgram(fileData, fileName, asmArray.size());
+            //program.setCpu(this.arrivalQueue.getNextCpuID(numCPUs));
+            this.arrivalQueue.add(program);
         }
+
+        if (this.arrivalQueue.hasPending()) {
+            vista.deshabilitarConfiguraciones();
+        }
+        actualizarVistaListaProcesos();
+    }
+
+    private void asignarTiemposLlegada() {
+        
     }
 
     /**
@@ -640,6 +685,8 @@ public class MiniPCController {
 
         this.cpu = new CPU(this.memory, this.interruptHandler); // ponemos cpu nueva
 
+        this.arrivalQueue = new ArrivalQueue();
+
         System.out.println("Configuraciones aplicadas correctamente.");
         vista.mostrarInfo("Configuraciones aplicadas correctamente.");
     }
@@ -668,6 +715,8 @@ public class MiniPCController {
         this.interruptHandler = new InterruptHandler(this.memory, this.processList, this.scheduler, this.fileSystem);
 
         this.cpu = new CPU(this.memory, this.interruptHandler); // ponemos cpu nueva
+
+        this.arrivalQueue = new ArrivalQueue();
 
         Job.resetPIDs();
         vista.limpiarVista();

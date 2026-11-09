@@ -15,6 +15,11 @@ public class SystemConfig {
     private static int memorySize = 256;
     private static int userMemoryStart;
 
+    //p2
+    private static int numCPUs = 1;
+    private static String algorithm = "FCFS";
+    private static int quantum = 1;
+
     private static int diskSize = 512;
     private static int diskMemoryVirtualSize;
     private static int diskFileIndexSize;
@@ -393,5 +398,9 @@ public class SystemConfig {
         return (int) Math.floor(
             diskSize * MAX_VIRTUAL_MEMORY_PERCENTAGE
         );
+    }
+
+    public static int getNumCPUs() {
+        return numCPUs;
     }
 }
