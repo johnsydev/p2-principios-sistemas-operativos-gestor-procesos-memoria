@@ -38,8 +38,11 @@ public class Process {
     private ArrayList<Instruction> instructions;
     private PCB pcb;
     private ProcessState state;
+    private int burstTime;
+    private int arrivalTime;
 
     private int pid;
+
 
     // Esto es para interfaz
     String pathFile;
@@ -58,6 +61,7 @@ public class Process {
         this.pid = id;
         this.instructions = new ArrayList<>(); //vacía esperando a Loader
         this.pcb = new PCB(this, startPosition, pcbStartAddress);
+        
     }
 
     /**
@@ -68,6 +72,7 @@ public class Process {
     public void setInstructions(ArrayList<Instruction> instructions) {
         this.instructions = instructions;
         this.pcb.configEndPosition(instructions.size());
+        this.setBurstTime();
     }
 
     /**
@@ -109,5 +114,21 @@ public class Process {
 
     public int getPID() {
         return pid;
+    }
+
+    public int getBurstTime(){
+        return burstTime;
+    }
+
+    public void setBurstTime() {
+        this.burstTime = instructions.size();
+    }
+
+    public int getArrivalTime() {
+        return arrivalTime;
+    }
+
+    public void setArrivalTime(int arrivalTime) {
+        this.arrivalTime = arrivalTime;
     }
 }
