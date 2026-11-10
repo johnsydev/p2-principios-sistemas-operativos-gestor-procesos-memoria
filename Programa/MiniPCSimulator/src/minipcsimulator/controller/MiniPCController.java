@@ -47,6 +47,7 @@ public class MiniPCController {
     private MainMemory memory;
     private Disk disk;
     private CPU cpu;
+    private ArrayList<CPU> cpus;
     private SystemClock systemClock;
     private JobList jobList;
     private ProcessList processList;
@@ -63,6 +64,8 @@ public class MiniPCController {
 
     private boolean autoExecute = false;
 
+    private int cpuIdTab = 1;
+
     /**
      * Constructor de la clase MiniPCController.
      * Inicializa la vista, la memoria principal y el CPU.
@@ -78,6 +81,9 @@ public class MiniPCController {
         this.fileSystem = new FileSystem(this.disk);
         this.interruptHandler = new InterruptHandler(this.memory, this.processList, this.scheduler, this.fileSystem);
         this.cpu = new CPU(this.memory, interruptHandler);
+        System.out.println("Iniciando CPU..." + this.cpu.getCpuID());
+        this.cpus = new ArrayList<>();
+        this.cpus.add(this.cpu);
         this.arrivalQueue = new ArrivalQueue();
 
         agregarListeners();
@@ -186,6 +192,12 @@ public class MiniPCController {
             public void actionPerformed(ActionEvent e) {
                 asignarTiemposLlegada();
             }
+        });
+
+        vista.getTabsCPU().addChangeListener(e -> {
+            int indice = vista.getTabsCPU().getSelectedIndex();
+            if (indice == -1) return;
+            this.cpuIdTab = indice+1;
         });
     }
 
@@ -321,8 +333,36 @@ public class MiniPCController {
         actualizarVistaListaProcesos();
     }
 
+    /**
+     * Abre el cuadro de diálogo para asignar tiempos de llegada y prioridades a los programas.
+     */
     private void asignarTiemposLlegada() {
-        
+        ArrayList<PendingProgram> programas = arrivalQueue.getPrograms();
+
+        if (programas.isEmpty()) {
+            vista.mostrarError("No hay programas seleccionados. Seleccione archivos .asm primero.");
+            return;
+        }
+
+        List<Object[]> filas = new ArrayList<>();
+        for (PendingProgram p : programas) {
+            filas.add(new Object[]{ p.getName(), p.getRafaga(), p.getArrivalTime(), p.getPriority() });
+        }
+
+        List<Object[]> resultado = vista.mostrarDialogoTiemposLlegada(filas);
+        if (resultado == null) return; // canceló
+
+        // aplicar cambios y dejar la cola en el mismo orden que la tabla
+        ArrayList<PendingProgram> ordenados = new ArrayList<>();
+        for (Object[] fila : resultado) {
+            PendingProgram p = programas.get((int) fila[0]);
+            p.setArrivalTime((int) fila[1]);
+            p.setPriority((int) fila[2]);
+            ordenados.add(p);
+        }
+
+        programas.clear();
+        programas.addAll(ordenados);
     }
 
     /**
@@ -419,28 +459,48 @@ public class MiniPCController {
      * @return true si el proceso está en un estado válido para ejecutar, false de lo contrario.
      */
     private boolean validarParaEjecutar() {
-        if (this.cpu.getPCB() == null && !this.processList.hasProcesses()) {
-            //vista.mostrarError("No hay un programa cargado. Seleccione un archivo .asm primero.");
-            actualizarVistaCPU();
-            finalizarSimulacion(); // PENDIENTE de ver si es aqui
+        // no se ha cargado nada todavía
+        if (!scheduler.hasPendingJobs() && !processList.hasProcesses() && todosLosCPUsLibres()) {
+            vista.mostrarError("No hay programas cargados. Seleccione archivos .asm primero.");
             return false;
         }
-        if (this.cpu.getPCB() != null) {
-            if (this.cpu.getPCB().getState() == ProcessState.EXIT && !this.processList.hasProcesses()) {
-                vista.setEstadoBCP("EXIT");
-                vista.mostrarError("El proceso ya ha terminado. Seleccione un nuevo archivo .asm para cargar otro programa.");
-                return false;
+
+        // ya todo terminó
+        if (simulacionTerminada()) {
+            actualizarVistaCPU();
+            finalizarSimulacion();
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Verifica si la simulación ha terminado.
+     * @return true si no hay trabajos pendientes y todos los procesos están en EXIT
+     */
+    private boolean simulacionTerminada() {
+        if (scheduler.hasPendingJobs()) return false;
+
+        for (Process p : processList.getProcesses()) {
+            if (p.getState() != ProcessState.EXIT) {
+                return false; // alguien sigue vivo (listo, bloqueado, suspendido o ejecutando)
             }
-            else if (this.cpu.getPCB().getState() == ProcessState.NEW) {
-                vista.mostrarError("El proceso aún no ha sido cargado en memoria. Cargue el programa primero.");
-                return false;
-            }
-            else if (this.cpu.getPCB().getState() == ProcessState.BLOCKED && this.interruptHandler.hasPendingInput()) {
-                vista.mostrarError("El proceso está bloqueado. No se puede ejecutar hasta que se desbloquee.");
+        }
+
+        return todosLosCPUsLibres();
+    }
+
+    /**
+     * Verifica si todos los CPUs están libres
+     * @return true si todos los CPUs están libres
+     */
+    private boolean todosLosCPUsLibres() {
+        for (CPU c : cpus) {
+            if (c.getPCB() != null && c.getPCB().getState() != ProcessState.EXIT) {
                 return false;
             }
         }
-        
         return true;
     }
 
@@ -604,16 +664,19 @@ public class MiniPCController {
      * Actualiza la vista del CPU con la información del proceso actual.
      */
     private void actualizarVistaCPU() {
-        if (this.cpu.getPCB() != null) {
-            vista.setProcessID(this.cpu.getPCB().getPID());
-            vista.setEstadoBCP(this.cpu.getPCB().getState().toString());
-            vista.setPC(this.cpu.getPC());
-            vista.setIR(this.cpu.getIR());
-            vista.setAC(this.cpu.getAC());
-            vista.setAX(this.cpu.getAX());
-            vista.setBX(this.cpu.getBX());
-            vista.setCX(this.cpu.getCX());
-            vista.setDX(this.cpu.getDX());
+        int cpuIndex = cpuIdTab-1;
+        CPU aCpu = this.cpus.get(cpuIndex);
+
+        if (aCpu.getPCB() != null) {
+            vista.setProcessID(cpuIndex, aCpu.getPCB().getPID());
+            vista.setEstadoBCP(cpuIndex, aCpu.getPCB().getState().toString());
+            vista.setPC(cpuIndex, aCpu.getPC());
+            vista.setIR(cpuIndex, aCpu.getIR());
+            vista.setAC(cpuIndex, aCpu.getAC());
+            vista.setAX(cpuIndex, aCpu.getAX());
+            vista.setBX(cpuIndex, aCpu.getBX());
+            vista.setCX(cpuIndex, aCpu.getCX());
+            vista.setDX(cpuIndex, aCpu.getDX());
         }
     }
 
@@ -683,7 +746,15 @@ public class MiniPCController {
         this.scheduler = new Scheduler(this.jobList, this.processList, this.memory, this.disk, this.systemClock);
         this.interruptHandler = new InterruptHandler(this.memory, this.processList, this.scheduler, this.fileSystem);
 
-        this.cpu = new CPU(this.memory, this.interruptHandler); // ponemos cpu nueva
+        this.cpus = new ArrayList<>(); // ponemos cpus nuevos
+        for (int i = 0; i < SystemConfig.getNumCPUs(); i++) {
+            this.cpus.add(new CPU(this.memory, this.interruptHandler));
+        }
+         
+        int cantidad = vista.getCantidadCPUSeleccionada();
+        vista.configurarCantidadCPU(cantidad);
+
+        this.cpu = this.cpus.get(0);
 
         this.arrivalQueue = new ArrivalQueue();
 
@@ -714,10 +785,16 @@ public class MiniPCController {
         this.scheduler = new Scheduler(this.jobList, this.processList, this.memory, this.disk, this.systemClock);
         this.interruptHandler = new InterruptHandler(this.memory, this.processList, this.scheduler, this.fileSystem);
 
-        this.cpu = new CPU(this.memory, this.interruptHandler); // ponemos cpu nueva
+        this.cpus = new ArrayList<>(); // ponemos cpus nuevos
+        for (int i = 0; i < SystemConfig.getNumCPUs(); i++) {
+            this.cpus.add(new CPU(this.memory, this.interruptHandler));
+        }
+
+        this.cpu = this.cpus.get(0);
 
         this.arrivalQueue = new ArrivalQueue();
 
+        CPU.resetIDs();
         Job.resetPIDs();
         vista.limpiarVista();
         vista.getDialogConfig().dispose();

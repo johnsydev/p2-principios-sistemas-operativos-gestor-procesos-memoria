@@ -509,11 +509,12 @@ public class VentanaPrincipal extends JFrame {
     }
 
     /**
-     * Ventana para asignar núcleo, llegada y prioridad a cada proceso.
-     * @param procesos Lista de filas [PID, Archivo, Ráfaga, Núcleo, Llegada, Prioridad]
-     * @return Las filas editadas, o null si se cancela
+     * Ventana para asignar llegada y prioridad a cada programa.
+     * Se reordena por tiempo de llegada cada vez que se cambia uno.
+     * @param programas Lista de filas [Archivo, Ráfaga, Llegada, Prioridad]
+     * @return Filas [indiceOriginal, Llegada, Prioridad] ordenadas por llegada, o null si se cancela
      */
-    public List<Object[]> mostrarDialogoTiemposLlegada(List<Object[]> procesos, int cantidadCPU) {
+    public List<Object[]> mostrarDialogoTiemposLlegada(List<Object[]> programas) {
         JDialog dialogLlegadas = new JDialog(this, "Tiempos de Llegada", true);
         dialogLlegadas.setSize(560, 380);
         dialogLlegadas.setResizable(false);
@@ -528,26 +529,34 @@ public class VentanaPrincipal extends JFrame {
         lblTituloModal.setFont(new Font("SansSerif", Font.BOLD, 14));
         lblTituloModal.setHorizontalAlignment(SwingConstants.CENTER);
 
-        String[] columnas = {"PID", "Archivo", "Ráfaga", "Núcleo", "Llegada", "Prioridad"};
+        // la columna "idx" guarda la posición original y no se muestra
+        String[] columnas = {"#", "Archivo", "Ráfaga", "Llegada", "Prioridad", "idx"};
         DefaultTableModel modelo = new DefaultTableModel(columnas, 0) {
             @Override
-            public boolean isCellEditable(int r, int c) { return c >= 3; }
+            public boolean isCellEditable(int r, int c) { return c == 3 || c == 4; }
         };
 
-        if (procesos != null) {
-            for (Object[] fila : procesos) {
-                modelo.addRow(fila.clone());
+        if (programas != null) {
+            for (int i = 0; i < programas.size(); i++) {
+                Object[] fila = programas.get(i);
+                modelo.addRow(new Object[]{i + 1, fila[0], fila[1], fila[2], fila[3], i});
             }
         }
 
         JTable tabla = crearTabla(modelo);
         tabla.putClientProperty("terminateEditOnFocusLost", Boolean.TRUE);
+        tabla.removeColumn(tabla.getColumnModel().getColumn(5)); // ocultar idx
 
-        JComboBox<Integer> cbNucleo = new JComboBox<>();
-        for (int i = 1; i <= cantidadCPU; i++) {
-            cbNucleo.addItem(i);
-        }
-        tabla.getColumnModel().getColumn(3).setCellEditor(new DefaultCellEditor(cbNucleo));
+        // reordenar cuando cambia una llegada
+        final boolean[] ordenando = {false};
+        modelo.addTableModelListener(e -> {
+            if (ordenando[0]) return;
+            if (e.getType() != javax.swing.event.TableModelEvent.UPDATE) return;
+            if (e.getColumn() != 3) return;
+            SwingUtilities.invokeLater(() -> ordenarPorLlegada(modelo, ordenando));
+        });
+
+        ordenarPorLlegada(modelo, ordenando); // orden inicial
 
         JScrollPane scroll = new JScrollPane(tabla);
         scroll.setBorder(BorderFactory.createLineBorder(BORDER, 1));
@@ -568,24 +577,21 @@ public class VentanaPrincipal extends JFrame {
             if (tabla.isEditing()) {
                 tabla.getCellEditor().stopCellEditing();
             }
+            ordenarPorLlegada(modelo, ordenando); // por si el último cambio no se ordenó
 
             List<Object[]> filas = new ArrayList<>();
             for (int i = 0; i < modelo.getRowCount(); i++) {
-                int nucleo = convertirEntero(modelo.getValueAt(i, 3));
-                int llegada = convertirEntero(modelo.getValueAt(i, 4));
-                int prioridad = convertirEntero(modelo.getValueAt(i, 5));
+                int llegada = convertirEntero(modelo.getValueAt(i, 3));
+                int prioridad = convertirEntero(modelo.getValueAt(i, 4));
 
-                if (nucleo < 1 || nucleo > cantidadCPU || llegada < 0 || prioridad < 1) {
+                if (llegada < 0 || prioridad < 1) {
                     JOptionPane.showMessageDialog(dialogLlegadas,
-                            "Valores inválidos para el PID " + modelo.getValueAt(i, 0) + ".",
+                            "Valores inválidos en la fila #" + (i + 1) + ".",
                             "Error", JOptionPane.ERROR_MESSAGE);
                     return;
                 }
 
-                filas.add(new Object[]{
-                    modelo.getValueAt(i, 0), modelo.getValueAt(i, 1), modelo.getValueAt(i, 2),
-                    nucleo, llegada, prioridad
-                });
+                filas.add(new Object[]{ modelo.getValueAt(i, 5), llegada, prioridad });
             }
 
             resultado.addAll(filas);
@@ -604,6 +610,30 @@ public class VentanaPrincipal extends JFrame {
         dialogLlegadas.setVisible(true);
 
         return guardado[0] ? resultado : null;
+    }
+
+    // Ordena las filas por llegada (estable) y renumera la columna #
+    private void ordenarPorLlegada(DefaultTableModel modelo, boolean[] ordenando) {
+        ordenando[0] = true;
+
+        List<Object[]> filas = new ArrayList<>();
+        for (int r = 0; r < modelo.getRowCount(); r++) {
+            Object[] fila = new Object[modelo.getColumnCount()];
+            for (int c = 0; c < modelo.getColumnCount(); c++) {
+                fila[c] = modelo.getValueAt(r, c);
+            }
+            filas.add(fila);
+        }
+
+        filas.sort((a, b) -> convertirEntero(a[3]) - convertirEntero(b[3]));
+
+        modelo.setRowCount(0);
+        for (int i = 0; i < filas.size(); i++) {
+            filas.get(i)[0] = i + 1;
+            modelo.addRow(filas.get(i));
+        }
+
+        ordenando[0] = false;
     }
 
     private int convertirEntero(Object valor) {
@@ -1329,6 +1359,7 @@ public class VentanaPrincipal extends JFrame {
     public JButton getBtnAbrirConfig() { return btnAbrirConfig; }
     public JButton getBtnGuardarConfig() { return btnGuardarConfig; }
     public JButton getBtnEstadisticas() { return btnEstadisticas; }
+    public JTabbedPane getTabsCPU() { return tabsCPU; }
 
     public JDialog getDialogConfig() { return dialogConfig; }
 

@@ -110,7 +110,7 @@ public class CPU {
      * @param interruptHandler El manejador de interrupciones del sistema.
      */
     public CPU(MainMemory memory, InterruptHandler interruptHandler) {
-        this.cpu_id = cpu_count++;
+        this.cpu_id = ++cpu_count;
         this.memory = memory;
         this.interruptHandler = interruptHandler;
     }
@@ -961,5 +961,9 @@ public class CPU {
 
     public PCB getPCB() {
         return pcb;
+    }
+
+    public static void resetIDs() {
+        cpu_count = 0;
     }
 }

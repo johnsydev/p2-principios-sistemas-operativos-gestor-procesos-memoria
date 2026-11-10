@@ -1,4 +1,4 @@
-package minipcsimulator.simulator;
+package minipcsimulator.model;
 
 import java.util.ArrayList;
 import java.util.List;
