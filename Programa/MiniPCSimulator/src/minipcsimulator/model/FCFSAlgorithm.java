@@ -7,4 +7,8 @@ public class FCFSAlgorithm implements SchedulingAlgorithm {
     public Process selectNext(List<Process> readyProcesses) {
         return readyProcesses.isEmpty() ? null : readyProcesses.get(0);
     }
+
+    public boolean isPreemptive() {
+        return false;
+    }
 }
