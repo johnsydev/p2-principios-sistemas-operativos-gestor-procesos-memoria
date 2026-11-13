@@ -43,6 +43,7 @@ public class Process {
 
     private int pid;
 
+    private int assignedCpuId = 1;
 
     // Esto es para interfaz
     String pathFile;
@@ -130,5 +131,13 @@ public class Process {
 
     public void setArrivalTime(int arrivalTime) {
         this.arrivalTime = arrivalTime;
+    }
+
+    public void setAssignedCpuId(int assignedCpuId) {
+        this.assignedCpuId = assignedCpuId;
+    }
+
+    public int getAssignedCpuId() {
+        return assignedCpuId;
     }
 }

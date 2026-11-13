@@ -50,6 +50,10 @@ public class VentanaPrincipal extends JFrame {
 
     private static final Integer[] TAMANOS_PAGINA = {4, 8, 16, 32, 64};
 
+    public static final int PREVIA_CANCELAR = 0;
+    public static final int PREVIA_INICIAR = 1;
+    public static final int PREVIA_CAMBIAR = 2;
+
     // Componentes de la interfaz
     private JButton btnSeleccionar, btnTiemposLlegada, btnCargar, btnPasoAPaso, btnEjecutar, btnPausar, btnLimpiar;
     private JButton btnEstadisticas, btnAbrirConfig, btnGuardarConfig;
@@ -506,6 +510,76 @@ public class VentanaPrincipal extends JFrame {
 
         dialogEstadisticas.setContentPane(panelModal);
         dialogEstadisticas.setVisible(true);
+    }
+
+    /**
+     * Muestra la tabla con los programas ya ordenados y con CPU asignado, solo para confirmar.
+     * @param programas Lista de filas [Archivo, Ráfaga, Llegada, Prioridad, CPU]
+     * @return PREVIA_INICIAR, PREVIA_CAMBIAR o PREVIA_CANCELAR
+     */
+    public int mostrarTablaPrevia(List<Object[]> programas) {
+        JDialog dialogPrevia = new JDialog(this, "Resumen antes de iniciar", true);
+        dialogPrevia.setSize(600, 380);
+        dialogPrevia.setResizable(false);
+        dialogPrevia.setLocationRelativeTo(this);
+
+        JPanel panelModal = new JPanel(new BorderLayout(12, 12));
+        panelModal.setBackground(BG_PANEL);
+        panelModal.setBorder(new EmptyBorder(16, 16, 16, 16));
+
+        JLabel lblTituloModal = new JLabel("CONFIRMAR PROGRAMAS");
+        lblTituloModal.setForeground(TEXT);
+        lblTituloModal.setFont(new Font("SansSerif", Font.BOLD, 14));
+        lblTituloModal.setHorizontalAlignment(SwingConstants.CENTER);
+
+        String[] columnas = {"#", "Archivo", "Ráfaga", "Llegada", "Prioridad", "CPU"};
+        DefaultTableModel modelo = new DefaultTableModel(columnas, 0) {
+            @Override
+            public boolean isCellEditable(int r, int c) { return false; } // solo ver
+        };
+
+        if (programas != null) {
+            for (int i = 0; i < programas.size(); i++) {
+                Object[] fila = programas.get(i);
+                modelo.addRow(new Object[]{i + 1, fila[0], fila[1], fila[2], fila[3], "CPU " + fila[4]});
+            }
+        }
+
+        JTable tabla = crearTabla(modelo);
+        JScrollPane scroll = new JScrollPane(tabla);
+        scroll.setBorder(BorderFactory.createLineBorder(BORDER, 1));
+
+        JPanel panelInferior = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        panelInferior.setOpaque(false);
+
+        final int[] opcion = {PREVIA_CANCELAR};
+
+        JButton btnCambiar = new JButton("Cambiar valores");
+        estilitarBotonSecundario(btnCambiar);
+        btnCambiar.setPreferredSize(new Dimension(140, 32));
+        btnCambiar.addActionListener(e -> {
+            opcion[0] = PREVIA_CAMBIAR;
+            dialogPrevia.dispose();
+        });
+
+        JButton btnIniciar = crearBotonPrincipal("Iniciar simulación");
+        btnIniciar.setPreferredSize(new Dimension(150, 32));
+        btnIniciar.addActionListener(e -> {
+            opcion[0] = PREVIA_INICIAR;
+            dialogPrevia.dispose();
+        });
+
+        panelInferior.add(btnCambiar);
+        panelInferior.add(btnIniciar);
+
+        panelModal.add(lblTituloModal, BorderLayout.NORTH);
+        panelModal.add(scroll, BorderLayout.CENTER);
+        panelModal.add(panelInferior, BorderLayout.SOUTH);
+
+        dialogPrevia.setContentPane(panelModal);
+        dialogPrevia.setVisible(true); // se bloquea aquí hasta que se cierre
+
+        return opcion[0];
     }
 
     /**

@@ -6,24 +6,26 @@ import minipcsimulator.utils.SystemConfig;
 public class Job {
     private static int nextPID = SystemConfig.FIRST_PROCESS_ID;
 
-    String pathFile; //ruta
-    String nameFile;
-    ArrayList<ArrayList<String>> asmArray = new ArrayList<>(); //array de instrucciones
-    ArrayList<String> lines = new ArrayList<>(); // lineas originales del archivo .asm
+    private String pathFile; //ruta
+    private String nameFile;
+    private ArrayList<ArrayList<String>> asmArray = new ArrayList<>(); //array de instrucciones
+    private ArrayList<String> lines = new ArrayList<>(); // lineas originales del archivo .asm
+ 
+    private int assignedPID;
+    private int diskStartAddress;
+    private int size;
+    private boolean isLoadedInMemory = false;
+    private int startAddressInRAM;
+    private int assignedCpuId = 1;
 
-    int assignedPID;
-    int diskStartAddress;
-    int size;
-    boolean isLoadedInMemory = false;
-    int startAddressInRAM;
-
-    public Job(String pathFile, String nameFile, ArrayList<String> lines, ArrayList<ArrayList<String>> asmArray) {
+    public Job(String pathFile, String nameFile, ArrayList<String> lines, ArrayList<ArrayList<String>> asmArray, int assignedCpuId) {
         this.pathFile = pathFile;
         this.nameFile = nameFile;
         this.lines = lines;
         this.asmArray = asmArray;
         this.size = asmArray.size();
         this.assignedPID = nextPID++;
+        this.assignedCpuId = assignedCpuId;
     }
 
     public void setDiskStartAddress(int diskStartAddress) {
@@ -51,6 +53,14 @@ public class Job {
             assignedPID = nextPID++;
         }
         return assignedPID;
+    }
+
+    public int getAssignedCpuId() {
+        return assignedCpuId;
+    }
+
+    public String getPathFile() {
+        return pathFile;
     }
 
     public String getNameFile() {

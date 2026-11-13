@@ -1,5 +1,6 @@
 package minipcsimulator.model;
 
+import java.util.ArrayList;
 import java.util.Stack;
 import minipcsimulator.utils.SystemConfig;
 
@@ -29,6 +30,12 @@ public class Dispatcher {
      */
     public static void saveContext(Process process, CPU cpu, MainMemory memory) {
         Dispatcher.saveRegistersIntoMemory(process, cpu, memory);
+    }
+
+    // elige el siguiente de la lista de un CPU
+    public static Process selectNext(ArrayList<Process> readyList) {
+        if (readyList.isEmpty()) return null;
+        return readyList.remove(0);
     }
 
     /**

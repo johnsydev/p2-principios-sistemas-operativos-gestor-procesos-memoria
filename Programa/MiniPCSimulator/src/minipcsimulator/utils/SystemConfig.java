@@ -34,6 +34,9 @@ public class SystemConfig {
     public static final int DISK_SIZE_MIN = 256;
     public static final int DISK_SIZE_MAX = 65536;
 
+    public static final int NUM_CPUS_MIN = 1;
+    public static final int NUM_CPUS_MAX = 5;
+
     //public static final int USER_MEMORY_START_MIN = 16;
 
     // POSICIONES BASE
@@ -402,5 +405,18 @@ public class SystemConfig {
 
     public static int getNumCPUs() {
         return numCPUs;
+    }
+
+    public static void setNumCPUs(int numCPUs) {
+        if (numCPUs < NUM_CPUS_MIN
+                || numCPUs > NUM_CPUS_MAX) {
+            throw new IllegalArgumentException(
+                "El número de CPUS debe estar entre "
+                + NUM_CPUS_MIN
+                + " y "
+                + NUM_CPUS_MAX
+            );
+        }
+        SystemConfig.numCPUs = numCPUs;
     }
 }

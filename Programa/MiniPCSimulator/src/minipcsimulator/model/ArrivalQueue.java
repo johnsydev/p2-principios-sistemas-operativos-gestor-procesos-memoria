@@ -20,7 +20,7 @@ public class ArrivalQueue {
         int rafaga;
         int arrivalTime = 0;
         int priority = 1;
-        int cpu = 1;
+        int assignedCpuId = 1;
 
         public PendingProgram(Map.Entry<ArrayList<String>, ArrayList<String>> fileData, String name, int rafaga) {
             this.fileData = fileData;
@@ -55,12 +55,12 @@ public class ArrivalQueue {
              this.priority = priority;
         }
 
-        public int getCpu() {
-            return cpu;
+        public int getAssignedCpuId() {
+            return assignedCpuId;
         }
 
-        public void setCpu(int cpu) {
-            this.cpu = cpu;
+        public void setAssignedCpuId(int assignedCpuId) {
+            this.assignedCpuId = assignedCpuId;
         }
     }
 
@@ -110,9 +110,5 @@ public class ArrivalQueue {
 
     public void clear() {
         programs.clear();
-    }
-
-    public int getNextCpuID(int cpuCount) {
-        return size() % cpuCount + 1;
     }
 }

@@ -1,5 +1,8 @@
 package minipcsimulator.model;
 
+import java.util.ArrayList;
+import java.util.LinkedList;
+
 import minipcsimulator.model.Process.ProcessState;
 import minipcsimulator.utils.SystemConfig;
 
@@ -10,12 +13,28 @@ public class Scheduler {
     private Disk disk;
     private SystemClock systemClock;
 
-    public Scheduler(JobList jobList, ProcessList processList, MainMemory memory, Disk disk, SystemClock systemClock) {
+    private ArrayList<ArrayList<Process>> readyLists = new ArrayList<>();
+
+    public Scheduler(JobList jobList, ProcessList processList, MainMemory memory, Disk disk, SystemClock systemClock, int numCPUs) {
         this.jobList = jobList;
         this.processList = processList;
         this.memory = memory;
         this.disk = disk;
         this.systemClock = systemClock;
+
+        // una lista de listos por CPU
+        for (int i = 0; i < numCPUs; i++) {
+            readyLists.add(new ArrayList<>());
+        }
+    }
+
+    public void addToReadyList(Process process) {
+        //process.getPCB().setState(ProcessState.READY);
+        readyLists.get(process.getAssignedCpuId() - 1).add(process);
+    }
+
+    public ArrayList<Process> getReadyList(int cpuIndex) {
+        return readyLists.get(cpuIndex);
     }
 
     public boolean hasPendingJobs() {
@@ -57,7 +76,8 @@ public class Scheduler {
                         return; // Si ya se admitió un proceso en memoria virtual, no admitir más en RAM, FCFS
                     }
                     Process process = new Process(job.getAssignedPID(), memoryStartAddress, pcbStartAddress);
-                    process.setFilePathAndName(job.pathFile, job.nameFile);
+                    process.setAssignedCpuId(job.getAssignedCpuId());
+                    process.setFilePathAndName(job.getPathFile(), job.getNameFile());
 
                     process.getPCB().setState(ProcessState.READY);
                     process.getPCB().setStartTime(systemClock.getTicks()); // tick de tiempo de inicio del proceso
@@ -67,6 +87,7 @@ public class Scheduler {
                     Loader.loadToMemory(process, memory, disk);
 
                     processList.addProcess(process);
+                    addToReadyList(process);
 
                 } else {
                     int virtualMemoryAddress = -1;
@@ -80,7 +101,8 @@ public class Scheduler {
                     onlyMemVirtual = true;
 
                     Process process = new Process(job.getAssignedPID(), virtualMemoryAddress, pcbStartAddress);
-                    process.setFilePathAndName(job.pathFile, job.nameFile);
+                    process.setAssignedCpuId(job.getAssignedCpuId());
+                    process.setFilePathAndName(job.getPathFile(), job.getNameFile());
 
                     process.getPCB().setState(ProcessState.READY_SUSPENDED); 
                     process.getPCB().setStartTime(systemClock.getTicks());
@@ -90,6 +112,7 @@ public class Scheduler {
                     Loader.loadToVirtualMemory(process, disk);
 
                     processList.addProcess(process);
+                    addToReadyList(process);
                     System.out.println("Proceso PID " + process.getPCB().getPID() + " admitido en estado READY/SUSPEND (Cargado en Memoria Virtual).");
                 }
 
