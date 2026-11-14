@@ -80,6 +80,7 @@ public class ProcessList {
         head = processList.isEmpty() ? null : processList.get(0);
 
         PCB pcb = process.getPCB();
+        pcb.setTimeEnd(SystemClock.getInstance().getTicks());
         int pos_end = pcb.getStartPosition() + pcb.getSizeProcessScope();
         for (int i = pcb.getStartPosition(); i < pos_end; i++) {
             memory.setPosition(i, null); // Limpia la memoria ocupada por el proceso

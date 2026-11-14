@@ -33,8 +33,6 @@ public class VentanaPrincipal extends JFrame {
     private static final Color GRAY = new Color(50, 55, 65);
     private static final Color PURPLE = new Color(110, 55, 150);
 
-    // Colores para la tabla de ejecución
-    private static final Color[] COLORES_PROCESOS = {BLUE, GREEN, ORANGE, PURPLE, CYAN, RED};
 
     private static final Color[] COLORES_CPU = {BLUE, GREEN, ORANGE, PURPLE, CYAN};
 
@@ -460,8 +458,8 @@ public class VentanaPrincipal extends JFrame {
 
     /**
      * Habilita el botón de estadísticas y despliega la ventana emergente modal
-     * con la tabla de tiempos por cada proceso ejecutado.
-     * @param datosEstadisticas Lista de filas [Algoritmo, Proceso, Tiempo Inicio, Tiempo Final, Tiempo Ocioso, Turnaround, Tr/Ts]
+     * con la configuración usada y la tabla de tiempos por cada proceso ejecutado.
+     * @param datosEstadisticas Lista de filas [Proceso, Tiempo Inicio, Tiempo Final, Duración, Tick inicio, Tick final, Tiempo Ocioso, Turnaround, Tr/Ts]
      */
     public void mostrarVentanaEstadisticas(List<Object[]> datosEstadisticas) {
         hayEstadisticas = true;
@@ -470,7 +468,7 @@ public class VentanaPrincipal extends JFrame {
         }
 
         dialogEstadisticas = new JDialog(this, "Estadísticas de Ejecución de Procesos", true);
-        dialogEstadisticas.setSize(760, 380);
+        dialogEstadisticas.setSize(900, 440);
         dialogEstadisticas.setResizable(false);
         dialogEstadisticas.setLocationRelativeTo(this);
 
@@ -484,8 +482,14 @@ public class VentanaPrincipal extends JFrame {
         lblTituloModal.setFont(new Font("SansSerif", Font.BOLD, 14));
         lblTituloModal.setHorizontalAlignment(SwingConstants.CENTER);
 
+        // Título arriba y la configuración usada debajo
+        JPanel panelEncabezado = new JPanel(new BorderLayout(0, 12));
+        panelEncabezado.setOpaque(false);
+        panelEncabezado.add(lblTituloModal, BorderLayout.NORTH);
+        panelEncabezado.add(crearPanelConfiguracionUsada(), BorderLayout.CENTER);
+
         // Tabla de Estadísticas
-        String[] columnasEst = {"Algoritmo", "Proceso", "Tiempo Inicio", "Tiempo Final", "Tiempo Ocioso", "Turnaround", "Tr / Ts"};
+        String[] columnasEst = {"Proceso", "Tiempo Inicio", "Tiempo Final", "Duración", "Tick inicio", "Tick final", "Tiempo Ocioso", "Turnaround", "Tr / Ts"};
         DefaultTableModel modeloEstadisticas = new DefaultTableModel(columnasEst, 0) {
             @Override
             public boolean isCellEditable(int r, int c) { return false; }
@@ -510,7 +514,7 @@ public class VentanaPrincipal extends JFrame {
         btnCerrar.addActionListener(e -> dialogEstadisticas.dispose());
         panelInferior.add(btnCerrar);
 
-        panelModal.add(lblTituloModal, BorderLayout.NORTH);
+        panelModal.add(panelEncabezado, BorderLayout.NORTH);
         panelModal.add(scrollEstadisticas, BorderLayout.CENTER);
         panelModal.add(panelInferior, BorderLayout.SOUTH);
 
@@ -518,6 +522,79 @@ public class VentanaPrincipal extends JFrame {
         dialogEstadisticas.setVisible(true);
     }
 
+    // Fila de tarjetas con la configuración usada en la simulación
+    private JPanel crearPanelConfiguracionUsada() {
+        JPanel fila = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 0));
+        fila.setOpaque(false);
+
+        // Planificación
+        String algoritmo = getAlgoritmoCPUSeleccionado();
+        fila.add(crearChipInfo("ALGORITMO CPU", algoritmo, BLUE));
+        fila.add(crearChipInfo("CPUS", String.valueOf(getCantidadCPUSeleccionada()), null));
+
+        if (algoritmoUsaQuantum(algoritmo)) {
+            fila.add(crearChipInfo("QUANTUM", String.valueOf(getQuantumSeleccionado()), null));
+        }
+        if ("Selfish Round Robin".equals(algoritmo)) {
+            fila.add(crearChipInfo("SELFISH RR", "a = " + getSelfishASeleccionado() + "  ·  b = " + getSelfishBSeleccionado(), null));
+        }
+        if ("Multilevel Feedback Queue".equals(algoritmo)) {
+            fila.add(crearChipInfo("COLAS MLFQ", String.valueOf(getColasMLFQSeleccionadas()), null));
+        }
+
+        // Memoria
+        String estrategia = getEstrategiaMemoriaSeleccionada();
+        fila.add(crearChipInfo("MEMORIA", estrategia, GREEN));
+
+        switch (estrategia) {
+            case "Dinámica":
+                fila.add(crearChipInfo("AJUSTE", getAjusteMemoriaSeleccionado(), null));
+                break;
+            case "Paginación":
+                fila.add(crearChipInfo("TAMAÑO DE PÁGINA", String.valueOf(getTamanoPaginaSeleccionado()), null));
+                break;
+            case "Partición fija (iguales)":
+                fila.add(crearChipInfo("TAMAÑO PARTICIÓN", String.valueOf(getTamanoParticionSeleccionado()), null));
+                break;
+            case "Partición fija (diferentes)":
+                String particiones = (txtParticiones != null) ? txtParticiones.getText().trim() : "8,16,32,64";
+                fila.add(crearChipInfo("PARTICIONES", particiones, null));
+                break;
+        }
+
+        return fila;
+    }
+
+    // Tarjeta pequeña: título gris arriba y valor abajo. Si tiene acento, lleva una barra de color a la izquierda
+    private JPanel crearChipInfo(String titulo, String valor, Color acento) {
+        JPanel chip = new JPanel(new BorderLayout(0, 2));
+        chip.setBackground(BG_CARD);
+
+        javax.swing.border.Border borde = BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(BORDER, 1),
+                new EmptyBorder(6, 12, 6, 12)
+        );
+        if (acento != null) {
+            borde = BorderFactory.createCompoundBorder(
+                    BorderFactory.createMatteBorder(0, 3, 0, 0, acento),
+                    borde
+            );
+        }
+        chip.setBorder(borde);
+
+        JLabel lblTitulo = new JLabel(titulo);
+        lblTitulo.setForeground(TEXT_SECONDARY);
+        lblTitulo.setFont(new Font("SansSerif", Font.BOLD, 10));
+
+        JLabel lblValor = new JLabel(valor);
+        lblValor.setForeground(TEXT);
+        lblValor.setFont(new Font("SansSerif", Font.BOLD, 12));
+
+        chip.add(lblTitulo, BorderLayout.NORTH);
+        chip.add(lblValor, BorderLayout.CENTER);
+        return chip;
+    }
+    
     /**
      * Muestra la tabla con los programas ya ordenados y con CPU asignado, solo para confirmar.
      * @param programas Lista de filas [Archivo, Ráfaga, Llegada, Prioridad, CPU]
@@ -1185,22 +1262,76 @@ public class VentanaPrincipal extends JFrame {
         public Component getTableCellRendererComponent(
                 JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
             Component c = super.getTableCellRendererComponent(table, value, false, false, row, column);
+            setIcon(null); // el renderer se reutiliza, hay que limpiar el ícono
 
-            if (table.convertColumnIndexToModel(column) >= 2 && value instanceof Integer) {
-                int cpuNum = Integer.parseInt(filasEjecucion.get(row).split("\\|")[0]);
-                c.setBackground(COLORES_CPU[(cpuNum - 1) % COLORES_CPU.length]);
+            int cpu = cpuDeFila(row);
+            Color colorCPU = COLORES_CPU[(cpu - 1) % COLORES_CPU.length];
+
+            // fondo alternado por CPU (no por fila) para que el grupo se vea como un bloque
+            Color fondo = (cpu % 2 == 1) ? BG_CARD : new Color(28, 32, 38);
+
+            // línea separadora solo al final de cada grupo de CPU
+            boolean ultimaDelGrupo = (row == filasEjecucion.size() - 1) || cpuDeFila(row + 1) != cpu;
+            int lineaAbajo = ultimaDelGrupo ? 1 : 0;
+
+            int columnaModelo = table.convertColumnIndexToModel(column);
+
+            if (columnaModelo == 0) {
+                // celda "combinada": el texto solo va en la fila del medio del grupo
+                if (row == filaMedioDelGrupo(row)) {
+                    setText("CPU " + cpu);
+                    setIcon(crearIconoColor(colorCPU));
+                    setIconTextGap(6);
+                } else {
+                    setText("");
+                }
+                c.setBackground(fondo);
+                setBorder(BorderFactory.createCompoundBorder(
+                        BorderFactory.createMatteBorder(0, 3, 0, 0, colorCPU),
+                        BorderFactory.createCompoundBorder(
+                                BorderFactory.createMatteBorder(0, 0, lineaAbajo, 0, BORDER),
+                                new EmptyBorder(0, 8, 0, 8)
+                        )
+                ));
+            } else if (columnaModelo >= 2 && value instanceof Integer) {
+                // segundo en el que corrió el proceso
+                c.setBackground(colorCPU);
                 setText("");
-            } else if (row % 2 == 0) {
-                c.setBackground(BG_CARD);
+                setBorder(BorderFactory.createMatteBorder(0, 0, lineaAbajo, 0, BORDER));
             } else {
-                c.setBackground(new Color(28, 32, 38));
+                c.setBackground(fondo);
+                setBorder(BorderFactory.createCompoundBorder(
+                        BorderFactory.createMatteBorder(0, 0, lineaAbajo, 0, BORDER),
+                        new EmptyBorder(0, 8, 0, 8)
+                ));
             }
-            c.setForeground(TEXT);
 
-            setBorder(new EmptyBorder(0, 8, 0, 8));
+            c.setForeground(TEXT);
             return c;
         }
     };
+
+    // Número de CPU de una fila de la tabla de ejecución ("cpu|pid")
+    private int cpuDeFila(int row) {
+        return Integer.parseInt(filasEjecucion.get(row).split("\\|")[0]);
+    }
+
+    // Fila del medio del grupo de filas del mismo CPU, donde va el texto "CPU X"
+    private int filaMedioDelGrupo(int row) {
+        int cpu = cpuDeFila(row);
+
+        int inicio = row;
+        while (inicio > 0 && cpuDeFila(inicio - 1) == cpu) {
+            inicio--;
+        }
+
+        int fin = row;
+        while (fin < filasEjecucion.size() - 1 && cpuDeFila(fin + 1) == cpu) {
+            fin++;
+        }
+
+        return (inicio + fin) / 2;
+    }
 
     // Hay que llamarlo cada vez que se agregan columnas
     private void configurarColumnasEjecucion() {

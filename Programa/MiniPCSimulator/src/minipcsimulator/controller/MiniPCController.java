@@ -97,7 +97,7 @@ public class MiniPCController {
 
     private void tick() {
         systemClock.tick();
-        vista.setTicks(systemClock.getTicks());
+        vista.setTicks(systemClock.getTicks() + 1);
     }
 
     private void abrirConfiguracion() {
@@ -649,7 +649,7 @@ public class MiniPCController {
             int pid = aCpu.getPCB().getPID();
             Process actual = processList.getProcessByPID(pid);
             String archivo = (actual != null) ? actual.getNameFile() : "";
-            vista.registrarEjecucion(i + 1, pid, archivo, systemClock.getTicks());
+            vista.registrarEjecucion(i + 1, pid, archivo, systemClock.getTicks() + 1);
 
             try {
                 aCpu.executeInstruction();
@@ -928,6 +928,8 @@ public class MiniPCController {
 
             LocalDateTime horaInicioDateT = this.startTimeSimulation.plusSeconds(ticksAcumulados);
             
+            int tickInicio = pcb.getStartTime();
+            int tickFin = pcb.getTimeEnd()+1;
             int ticksProceso = pcb.getTimeSpent();
             ticksAcumulados += ticksProceso;
 
@@ -935,9 +937,17 @@ public class MiniPCController {
 
             String horaInicio = horaInicioDateT.format(formatter);
             String horaFin = horaFinDateT.format(formatter);
-            double duracionSegundos = (double) ticksProceso;
+            
 
-            datosEstadisticas.add(new Object[]{pid, horaInicio, horaFin, String.format("%.2f s", duracionSegundos)});
+            int turnaround = tickFin - tickInicio;
+
+            int tiempoOcioso = turnaround - ticksProceso;
+
+            double trTs = (ticksProceso > 0) ? (double) turnaround / ticksProceso : 0;
+
+            double duracionSegundos = (double) turnaround;
+
+            datosEstadisticas.add(new Object[]{pid, horaInicio, horaFin, String.format("%.2f s", duracionSegundos), tickInicio, tickFin, tiempoOcioso, turnaround, String.format("%.2f", trTs)});
         }
 
         vista.mostrarVentanaEstadisticas(datosEstadisticas);

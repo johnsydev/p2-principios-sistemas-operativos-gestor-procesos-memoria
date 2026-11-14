@@ -39,6 +39,7 @@ public class PCB {
     private int cpu_id = 0;
     private int start_time = 0; // tick de tiempo de inicio del proceso
     private int time_spent = 0; // tiempo total que ha estado en ejecución el proceso en ticks
+    private int time_end = 0; // tick de tiempo de fin del proceso
 
     ArrayList<String> openedFiles = new ArrayList<>();
 
@@ -252,12 +253,20 @@ public class PCB {
         return time_spent;
     }
 
+    public int getTimeEnd() {
+        return time_end;
+    }
+
     public void setTimeSpent(int time_spent) {
         this.time_spent = time_spent;
     }
 
     public void incrementTimeSpent() {
         this.time_spent++;
+    }
+
+    public void setTimeEnd(int time_end) {
+        this.time_end = time_end;
     }
 
     public void setPriority(int priority) {
