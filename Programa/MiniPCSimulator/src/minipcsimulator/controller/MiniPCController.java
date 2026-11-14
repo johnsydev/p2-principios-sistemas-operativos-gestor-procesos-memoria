@@ -623,6 +623,13 @@ public class MiniPCController {
         }
         System.out.println("Ejecución automática iniciada.");
 
+        for (Process p : processList.getProcesses()) {
+            if (p.getState() == ProcessState.BLOCKED) {
+                p.getPCB().setState(ProcessState.READY); // esto es porque no hay input entonces para evitar pegarse en blocked
+                scheduler.addToReadyList(p);
+            }
+        }
+
         if (!autoExecute) {
             tick();
             aceptarProgramasNuevos();
@@ -639,12 +646,19 @@ public class MiniPCController {
                 Dispatcher.dispatch(nextProcess, aCpu);
             }
 
+            int pid = aCpu.getPCB().getPID();
+            Process actual = processList.getProcessByPID(pid);
+            String archivo = (actual != null) ? actual.getNameFile() : "";
+            vista.registrarEjecucion(i + 1, pid, archivo, systemClock.getTicks());
+
             try {
                 aCpu.executeInstruction();
             } catch (RuntimeException e) {
                 terminarProcesoDeCPU(aCpu, e.getMessage());
                 continue;
             }
+
+            if (aCpu.getPCB() == null) continue;
 
             ProcessState status = aCpu.getPCB().getState();
             if (status == ProcessState.EXIT) {

@@ -18,19 +18,19 @@ public class InterruptHandler {
     }
 
     public void handleInterruptEXIT(CPU cpu) {
-        // Obtener el proceso actual
-        Process currentProcess = processList.getFirstProcess();
-        if (currentProcess == null) {
-            System.out.println("No hay proceso actual para manejar la interrupción EXIT.");
+        // Obtener el PCB actual
+        PCB pcb = cpu.getPCB();
+        if (pcb == null) {
+            System.out.println("No hay PCB actual para manejar la interrupción EXIT.");
             return;
         }
 
         cpu.getPCB().setState(Process.ProcessState.EXIT);
 
         // Eliminar el proceso de la lista de procesos
-        processList.removeProcess(currentProcess.getPCB().getPID());
+        processList.removeProcess(pcb.getPID());
 
-        sendToIInternalConsole("[PID " + currentProcess.getPCB().getPID() + "]: " + "Proceso terminado con éxito." + "\n");
+        sendToIInternalConsole("[PID " + pcb.getPID() + "]: " + "Proceso terminado con éxito." + "\n");
 
         cpu.setPCB(null);
 

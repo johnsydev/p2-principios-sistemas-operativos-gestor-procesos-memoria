@@ -7,6 +7,7 @@ import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
 import minipcsimulator.utils.SystemConfig;
@@ -34,6 +35,11 @@ public class VentanaPrincipal extends JFrame {
 
     // Colores para la tabla de ejecución
     private static final Color[] COLORES_PROCESOS = {BLUE, GREEN, ORANGE, PURPLE, CYAN, RED};
+
+    private static final Color[] COLORES_CPU = {BLUE, GREEN, ORANGE, PURPLE, CYAN};
+
+    // fila de la RAM con color del CPU que la está ejecutando
+    private HashMap<Integer, Color> filasCPU = new HashMap<>();
 
     public static final int MAX_CPUS = 5;
 
@@ -735,6 +741,7 @@ public class VentanaPrincipal extends JFrame {
             public boolean isCellEditable(int r, int c) { return false; }
         };
         tablaMemoria = crearTabla(modeloTablaMemoria);
+        configurarRendererMemoria();
         JScrollPane scrollRAM = new JScrollPane(tablaMemoria);
         scrollRAM.setBorder(BorderFactory.createEmptyBorder());
         cardRAM.add(scrollRAM, BorderLayout.CENTER);
@@ -874,6 +881,37 @@ public class VentanaPrincipal extends JFrame {
         return panelCentral;
     }
 
+    // Pinta cada fila en ejecución con el color de su CPU
+    private void configurarRendererMemoria() {
+        DefaultTableCellRenderer renderer = new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(
+                    JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+                Component c = super.getTableCellRendererComponent(table, value, false, false, row, column);
+
+                Color colorCPU = filasCPU.get(row);
+                if (colorCPU != null) {
+                    c.setBackground(colorCPU);
+                    c.setForeground(Color.WHITE);
+                } else {
+                    if (row % 2 == 0) {
+                        c.setBackground(BG_CARD);
+                    } else {
+                        c.setBackground(new Color(28, 32, 38));
+                    }
+                    c.setForeground(TEXT);
+                }
+
+                setBorder(new EmptyBorder(0, 8, 0, 8));
+                return c;
+            }
+        };
+
+        for (int i = 0; i < tablaMemoria.getColumnCount(); i++) {
+            tablaMemoria.getColumnModel().getColumn(i).setCellRenderer(renderer);
+        }
+    }
+
     // Crea el panel derecho para BCP, registros del CPU y Lista de Trabajos
     private JPanel crearPanelBCP() {
         JPanel panelPrincipal = new JPanel();
@@ -986,8 +1024,25 @@ public class VentanaPrincipal extends JFrame {
 
         tabsCPU.removeAll();
         for (int i = 0; i < cantidad; i++) {
-            tabsCPU.addTab("CPU " + (i + 1), panelesCPU[i]);
+            tabsCPU.addTab("CPU " + (i + 1), crearIconoColor(COLORES_CPU[i]), panelesCPU[i]);
         }
+    }
+
+    // Cuadrito de color para identificar cada CPU en su pestaña
+    private Icon crearIconoColor(Color color) {
+        return new Icon() {
+            @Override
+            public void paintIcon(Component c, Graphics g, int x, int y) {
+                g.setColor(color);
+                g.fillRoundRect(x, y, 10, 10, 3, 3);
+            }
+
+            @Override
+            public int getIconWidth() { return 10; }
+
+            @Override
+            public int getIconHeight() { return 10; }
+        };
     }
 
     private JPanel crearCard() {
@@ -1132,8 +1187,8 @@ public class VentanaPrincipal extends JFrame {
             Component c = super.getTableCellRendererComponent(table, value, false, false, row, column);
 
             if (table.convertColumnIndexToModel(column) >= 2 && value instanceof Integer) {
-                int pid = (Integer) value;
-                c.setBackground(COLORES_PROCESOS[pid % COLORES_PROCESOS.length]);
+                int cpuNum = Integer.parseInt(filasEjecucion.get(row).split("\\|")[0]);
+                c.setBackground(COLORES_CPU[(cpuNum - 1) % COLORES_CPU.length]);
                 setText("");
             } else if (row % 2 == 0) {
                 c.setBackground(BG_CARD);
@@ -1255,6 +1310,10 @@ public class VentanaPrincipal extends JFrame {
         actualizarTablaMemoria(listaMemoria, new int[]{indiceResaltado});
     }
 
+    /**
+     * Actualiza la RAM y pinta la fila en ejecución de cada CPU con su color.
+     * @param indicesResaltados indicesResaltados[i] = fila que ejecuta el CPU i (-1 si está libre)
+     */
     public void actualizarTablaMemoria(List<Object[]> listaMemoria, int[] indicesResaltados) {
         modeloTablaMemoria.setRowCount(0);
         for (Object[] fila : listaMemoria) {
@@ -1262,14 +1321,25 @@ public class VentanaPrincipal extends JFrame {
         }
 
         tablaMemoria.clearSelection();
-        if (indicesResaltados == null) return;
+        filasCPU.clear();
 
-        for (int indice : indicesResaltados) {
-            if (indice >= 0 && indice < tablaMemoria.getRowCount()) {
-                tablaMemoria.addRowSelectionInterval(indice, indice);
-                tablaMemoria.scrollRectToVisible(tablaMemoria.getCellRect(indice, 0, true));
+        if (indicesResaltados != null) {
+            boolean primero = true;
+            for (int i = 0; i < indicesResaltados.length; i++) {
+                int indice = indicesResaltados[i];
+                if (indice >= 0 && indice < tablaMemoria.getRowCount()) {
+                    filasCPU.put(indice, COLORES_CPU[i % COLORES_CPU.length]);
+
+                    // hace scroll solo hasta la primera fila
+                    if (primero) {
+                        tablaMemoria.scrollRectToVisible(tablaMemoria.getCellRect(indice, 0, true));
+                        primero = false;
+                    }
+                }
             }
         }
+
+        tablaMemoria.repaint();
     }
 
     /**

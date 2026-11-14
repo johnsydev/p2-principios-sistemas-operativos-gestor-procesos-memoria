@@ -68,6 +68,10 @@ public class ProcessList {
 
     public void removeProcess(int pid) {
         Process process = getProcessByPID(pid);
+        if (process == null) {
+            System.out.println("ERROR: Proceso " + pid + " ya no está en la lista.");
+            return;
+        }
         System.out.println("Proceso " + pid + " eliminado.");
         System.out.println("Estado del proceso antes de eliminarlo: " + process.getPCB());
         System.out.println("Lista de procesos: " + processList);
@@ -87,7 +91,7 @@ public class ProcessList {
         }
     }
 
-    private Process getProcessByPID(int pid) {
+    public Process getProcessByPID(int pid) {
         for (Process process : processList) {
             if (process.getPCB().getPID() == pid) {
                 return process;
