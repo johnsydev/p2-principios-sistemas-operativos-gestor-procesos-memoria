@@ -141,12 +141,10 @@ public class MiniPCController {
             }
         });
 
-        // Botón para cargar el programa en memoria RAM
-        vista.getBtnCargar().addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                cargarPrograma();
-            }
+        // Botón para pausar el programa
+        vista.getBtnPausar().addActionListener(e -> {
+            autoExecute = false; // el programa se detiene en la siguiente vuelta
+            vista.setModoAutomatico(false);
         });
 
         // Botón para ejecutar un paso del programa (modo paso a paso)
@@ -630,11 +628,9 @@ public class MiniPCController {
             }
         }
 
-        if (!autoExecute) {
-            tick();
-            aceptarProgramasNuevos();
-            cargarPrograma();
-        }
+        tick();
+        aceptarProgramasNuevos();
+        cargarPrograma();
         
         // despachar si está libre y ejecutar
         for (int i = 0; i < cpus.size(); i++) {
@@ -695,28 +691,19 @@ public class MiniPCController {
         }
 
         this.autoExecute = true;
+        vista.setModoAutomatico(true);
         
         new Thread(() -> {
             boolean running = true;
             boolean loaded = false;
 
             while (running) {
-                
-                // ESTO SE EJECUTA POR CADA TICK
-                tick();
-                aceptarProgramasNuevos();
-                if (!loaded) {
-                    cargarPrograma();
-                    loaded = true;
-                }
 
-                Process processCheck = this.processList.getFirstProcess();
-                if (processCheck != null && processCheck.getState() == ProcessState.BLOCKED && this.interruptHandler.hasPendingInput()) {
-                    System.out.println("Ejecución automática pausada: Esperando entrada de teclado.");
-                    break; //sale del hilo a esperar input
-                }
-
-                javax.swing.SwingUtilities.invokeLater(() -> ejecutarPasoAPaso()); //pendiebte de antes o despues de sleep
+                javax.swing.SwingUtilities.invokeLater(() -> {
+                    if (autoExecute) {
+                        ejecutarPasoAPaso();
+                    }
+                });
 
                 try {
                     Thread.sleep(1000); // 1 segundo
@@ -724,25 +711,7 @@ public class MiniPCController {
                     Thread.currentThread().interrupt();
                     break;
                 }
-
-                Process current = this.processList.getFirstProcess();
-                if (current != null) {
-                    // pausar si cae en bloqueado y hay input pendiente
-                    if (current.getState() == ProcessState.BLOCKED && this.interruptHandler.hasPendingInput()) {
-                        System.out.println("Proceso bloqueado por input. Hilo automático pausado.");
-                        running = false;
-                    }
-                } else if (!this.scheduler.hasPendingJobs()) {
-                    running = false;
-                }
             }
-
-            javax.swing.SwingUtilities.invokeLater(() -> {
-                Process activeProc = this.processList.getFirstProcess();
-                if (activeProc != null && activeProc.getState() == ProcessState.EXIT) {
-                    vista.setEstadoBCP("EXIT");
-                }
-            });
         }).start(); 
     }
 

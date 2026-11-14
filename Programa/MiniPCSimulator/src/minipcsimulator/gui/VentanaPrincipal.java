@@ -59,7 +59,7 @@ public class VentanaPrincipal extends JFrame {
     public static final int PREVIA_CAMBIAR = 2;
 
     // Componentes de la interfaz
-    private JButton btnSeleccionar, btnTiemposLlegada, btnCargar, btnPasoAPaso, btnEjecutar, btnPausar, btnLimpiar;
+    private JButton btnSeleccionar, btnTiemposLlegada, btnPasoAPaso, btnEjecutar, btnPausar, btnLimpiar;
     private JButton btnEstadisticas, btnAbrirConfig, btnGuardarConfig;
     private JSpinner spTamanoMemoria, spLimiteKernel, spTamanoDisco, spTamanoVirtual;
     private JSpinner spCantidadCPU, spQuantum, spSelfishA, spSelfishB, spColasMLFQ, spTamanoParticion;
@@ -188,7 +188,6 @@ public class VentanaPrincipal extends JFrame {
 
         btnSeleccionar = crearBoton("Seleccionar .asm", BLUE);
         btnTiemposLlegada = crearBoton("Tiempos de llegada", BLUE);
-        btnCargar = crearBoton("Cargar programas", ORANGE);
         btnPasoAPaso = crearBoton("Paso a paso", CYAN);
         btnEjecutar = crearBoton("Ejecutar todo", GREEN);
         btnPausar = crearBoton("Pausar", GRAY);
@@ -198,8 +197,6 @@ public class VentanaPrincipal extends JFrame {
         panelPrincipal.add(btnSeleccionar);
         panelPrincipal.add(Box.createVerticalStrut(8));
         panelPrincipal.add(btnTiemposLlegada);
-        panelPrincipal.add(Box.createVerticalStrut(8));
-        panelPrincipal.add(btnCargar);
         panelPrincipal.add(Box.createVerticalStrut(8));
         panelPrincipal.add(btnPasoAPaso);
         panelPrincipal.add(Box.createVerticalStrut(8));
@@ -1555,7 +1552,6 @@ public class VentanaPrincipal extends JFrame {
     public void setModoAutomatico(boolean activo) {
         btnSeleccionar.setEnabled(!activo);
         btnTiemposLlegada.setEnabled(!activo);
-        btnCargar.setEnabled(!activo);
         btnPasoAPaso.setEnabled(!activo);
         btnEjecutar.setEnabled(!activo);
         btnLimpiar.setEnabled(!activo);
@@ -1626,7 +1622,6 @@ public class VentanaPrincipal extends JFrame {
 
     public JButton getBtnSeleccionar() { return btnSeleccionar; }
     public JButton getBtnTiemposLlegada() { return btnTiemposLlegada; }
-    public JButton getBtnCargar() { return btnCargar; }
     public JButton getBtnPasoAPaso() { return btnPasoAPaso; }
     public JButton getBtnEjecutar() { return btnEjecutar; }
     public JButton getBtnPausar() { return btnPausar; }
