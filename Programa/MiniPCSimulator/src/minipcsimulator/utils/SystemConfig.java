@@ -20,6 +20,10 @@ public class SystemConfig {
     private static String algorithm = "FCFS";
     private static int quantum = 1;
 
+    //planif memoria
+    private static String memoryStrategyAssignment = "dynamic"; // dynamic, paging, fixed_equal, fixed_different
+    private static String memoryFit = "first";  // first, next, best
+
     private static int diskSize = 512;
     private static int diskMemoryVirtualSize;
     private static int diskFileIndexSize;
@@ -419,4 +423,51 @@ public class SystemConfig {
         }
         SystemConfig.numCPUs = numCPUs;
     }
+
+
+    // Para asignación de memoria
+
+    public static void setMemoryStrategyAssignment(String memoryStrategyAssignment) {
+        String code = "";
+        switch(memoryStrategyAssignment) {
+            case "Dinámica":
+                code = "dynamic";
+                break;
+            case "Paginación":
+                code = "paging";
+                break;
+            case "Partición fija (iguales)":
+                code = "fixed_equal";
+                break;
+            case "Partición fija (diferentes)":
+                code = "fixed_different";
+                break;
+        }
+        SystemConfig.memoryStrategyAssignment = code;
+    }
+
+    public static String getMemoryStrategyAssignment() {
+        return memoryStrategyAssignment;
+    }
+
+    public static void setMemoryFit(String memoryFit) {
+        String code = "";
+        switch(memoryFit) {
+            case "Best Fit":
+                code = "best";
+                break;
+            case "First Fit":
+                code = "first";
+                break;
+            case "Next Fit":
+                code = "next";
+                break;
+        }
+        SystemConfig.memoryFit = code;
+    }
+
+    public static String getMemoryFit() {
+        return memoryFit;
+    }
+
 }

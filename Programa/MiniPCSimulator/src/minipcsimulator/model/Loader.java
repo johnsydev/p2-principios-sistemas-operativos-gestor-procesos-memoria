@@ -9,6 +9,24 @@ import minipcsimulator.utils.SystemConfig;
  */
 public class Loader {
 
+    private static int nextFitIndex = SystemConfig.getUserMemoryStart();
+
+    public static void resetNextFitIndex() {
+        nextFitIndex = SystemConfig.getUserMemoryStart();
+    }
+
+    public static int getNextFitIndex() {
+        return nextFitIndex;
+    }
+
+    private static void setNextFitIndex(int startProcess, int size) {
+        int next = startProcess + size;
+        if (next >= SystemConfig.getMemorySize()) {
+            next = SystemConfig.getUserMemoryStart();
+        }
+        nextFitIndex = next;
+    }
+
     /**
      * Carga el programa en disco (no en la memoria principal), crea las instrucciones para almacenarlas en el proceso y tenerlas listas para cargar en memoria posteriormente.
      * @param lines Lista de líneas del archivo .asm originales.
@@ -71,6 +89,7 @@ public class Loader {
         ArrayList<Instruction> instructions = new ArrayList<>();
         try {
             int position = getFreeSpaceInMemory(size, memory); // posición inicio en RAM, i y position son RAM
+            Loader.setNextFitIndex(position, size);
 
             for (int i = position; i < position + size; i++) {
                 Instruction instruction = disk.getInstruction(startAddressDisk);
@@ -126,6 +145,7 @@ public class Loader {
         try {
             // nueva dirección de inicio libre en la RAM de Usuario
             int newRamPosition = getFreeSpaceInMemory(size, memory);
+            Loader.setNextFitIndex(newRamPosition, size);
 
             // mueve instrucciones de memoria virtual a RAM y limpia memoria virtual
             for (int i = 0; i < size; i++) {
@@ -189,17 +209,12 @@ public class Loader {
                             "Se requerían " + size + " celdas libres.");
     }
 
-    /**
-     * Busca un bloque continuo de celdas libres en la Memoria Principal (RAM) a partir de la
-     * dirección reservada para programas de usuario.
-     * 
-     * @param size Cantidad de instrucciones consecutivas que requiere el programa.
-     * @param memory La Memoria Principal donde se buscará el espacio libre.
-     * @return La dirección de memoria RAM donde inicia el espacio libre encontrado.
-     * @throws Exception Si la memoria está llena o no hay un bloque contiguo del tamaño requerido.
-     */
-    public static int getFreeSpaceInMemory(int size, MainMemory memory) throws Exception {
-        int startAddress = SystemConfig.getUserMemoryStart();
+    private static int getFreeSpaceInMemory_first_next_Fit(int size, MainMemory memory, String type) throws Exception {
+        int userMemoryStart = SystemConfig.getUserMemoryStart();
+        int startAddress = userMemoryStart;
+        if (type.equals("next")) {
+            startAddress = Loader.getNextFitIndex();
+        }
         int totalMemorySize = SystemConfig.getMemorySize();
 
         int consecutiveFree = 0;
@@ -223,6 +238,108 @@ public class Loader {
                 startIndex = -1;
             }
         }
+
+        // no se encontró desde el puntero, se reinicia el conteo para dar la vuelta hasta donde habíamos empezado
+        consecutiveFree = 0;
+        startIndex = -1;
+
+        if (type.equals("next")) {
+            for (int i = userMemoryStart; i < totalMemorySize; i++) {
+                if (memory.getPosition(i) == null) {
+                    if (consecutiveFree == 0) {
+                        startIndex = i; // marca el inicio si no había uno
+                    }
+                    consecutiveFree++;
+
+                    // si se encuentra bloque continuo con la cantidad de celdas necesarias
+                    if (consecutiveFree == size) {
+                        return startIndex;
+                    }
+                } else {
+                    // si se rompe la continuidad, reiniciamos el conteo
+                    consecutiveFree = 0;
+                    startIndex = -1;
+
+                    // si ya dimos toda la vuelta, salir
+                    if (i >= startAddress) {
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Si después de recorrer toda la memoria no se encontró un bloque contiguo suficiente
+        throw new Exception("No hay espacio libre contiguo suficiente en la Memoria Principal. " +
+                            "Se requerían " + size + " celdas libres.");
+    }
+
+    private static int getFreeSpaceInMemory_bestFit(int size, MainMemory memory) throws Exception {
+        int userMemoryStart = SystemConfig.getUserMemoryStart();
+        int startAddress = userMemoryStart;
+        int totalMemorySize = SystemConfig.getMemorySize();
+
+        int consecutiveFree = 0;
+        int startIndex = -1;
+
+        int bestFitIndex = -1;
+        int bestFitSize = -1;
+
+        for (int i = startAddress; i < totalMemorySize; i++) {
+            // Verificamos si la celda actual en la memoria está libre
+            if (memory.getPosition(i) == null) {
+                if (consecutiveFree == 0) {
+                    startIndex = i; // marca el inicio si no había uno
+                }
+                consecutiveFree++;
+            } else {
+                // si se rompe la continuidad, reiniciamos el conteo
+                if ((bestFitIndex == -1 || consecutiveFree < bestFitSize) && consecutiveFree >= size) {
+                    bestFitIndex = startIndex;
+                    bestFitSize = consecutiveFree;
+                }
+
+                consecutiveFree = 0;
+                startIndex = -1;
+            }
+        }
+
+        if ((bestFitIndex == -1 || consecutiveFree < bestFitSize) && consecutiveFree >= size) {
+            bestFitIndex = startIndex;
+            bestFitSize = consecutiveFree;
+        }
+
+        if (bestFitIndex != -1) {
+            return bestFitIndex;
+        }
+
+        // Si después de recorrer toda la memoria no se encontró un bloque contiguo suficiente
+        throw new Exception("No hay espacio libre contiguo suficiente en la Memoria Principal. " +
+                            "Se requerían " + size + " celdas libres.");
+    }
+
+    /**
+     * Busca un bloque continuo de celdas libres en la Memoria Principal (RAM) a partir de la
+     * dirección reservada para programas de usuario.
+     * 
+     * @param size Cantidad de instrucciones consecutivas que requiere el programa.
+     * @param memory La Memoria Principal donde se buscará el espacio libre.
+     * @return La dirección de memoria RAM donde inicia el espacio libre encontrado.
+     * @throws Exception Si la memoria está llena o no hay un bloque contiguo del tamaño requerido.
+     */
+    public static int getFreeSpaceInMemory(int size, MainMemory memory) throws Exception {
+        
+        switch(SystemConfig.getMemoryStrategyAssignment()) {
+            case "dynamic":
+                switch(SystemConfig.getMemoryFit()) {
+                    case "first":
+                        return getFreeSpaceInMemory_first_next_Fit(size, memory, "first");
+                    case "next":
+                        return getFreeSpaceInMemory_first_next_Fit(size, memory, "next");
+                    case "best":
+                        return getFreeSpaceInMemory_bestFit(size, memory);
+                }
+        }
+        
 
         // Si después de recorrer toda la memoria no se encontró un bloque contiguo suficiente
         throw new Exception("No hay espacio libre contiguo suficiente en la Memoria Principal. " +

@@ -795,6 +795,9 @@ public class MiniPCController {
         SystemConfig.setDiskMemoryVirtualSize(virtualSize);
         SystemConfig.setNumCPUs(numCPUs);
 
+        SystemConfig.setMemoryStrategyAssignment(vista.getEstrategiaMemoriaSeleccionada());
+        SystemConfig.setMemoryFit(vista.getAjusteMemoriaSeleccionado());
+
         this.memory = null; //sacamos memoria vieja
         this.cpu = null; //sacamos cpu vieja
         this.disk = null; //sacamos disco viejo
@@ -821,6 +824,8 @@ public class MiniPCController {
         this.cpu = this.cpus.get(0);
 
         this.arrivalQueue = new ArrivalQueue();
+
+        Loader.resetNextFitIndex();
 
         System.out.println("Configuraciones aplicadas correctamente.");
         vista.mostrarInfo("Configuraciones aplicadas correctamente.");
@@ -860,6 +865,7 @@ public class MiniPCController {
 
         CPU.resetIDs();
         Job.resetPIDs();
+        Loader.resetNextFitIndex();
         vista.limpiarVista();
         vista.getDialogConfig().dispose();
         vista.habilitarConfiguraciones();
