@@ -3,8 +3,15 @@ package minipcsimulator.gui;
 import com.formdev.flatlaf.FlatClientProperties;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.text.AbstractDocument;
+import javax.swing.text.AttributeSet;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.DefaultFormatter;
+import javax.swing.text.DocumentFilter;
 import java.awt.*;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -39,6 +46,16 @@ public class VentanaPrincipal extends JFrame {
     // fila de la RAM con color del CPU que la está ejecutando
     private HashMap<Integer, Color> filasCPU = new HashMap<>();
 
+    // color de cada dirección de RAM según su partición fija (vacío si no hay particiones)
+    private HashMap<Integer, Color> coloresParticion = new HashMap<>();
+    private int[] inicioParticiones = null;
+    private int[] tamanoParticiones = null;
+
+    // gris para las celdas sobrantes que no completan una partición
+    private static final Color GRIS_DESPERDICIO = new Color(105, 110, 120);
+    private static final float TRANSPARENCIA_PARTICION = 0.25f;
+    private static final float TRANSPARENCIA_DESPERDICIO = 0.55f;
+
     public static final int MAX_CPUS = 5;
 
     public static final String[] ALGORITMOS_CPU = {
@@ -67,7 +84,13 @@ public class VentanaPrincipal extends JFrame {
     private JComboBox<Integer> cbTamanoPagina;
     private JTextField txtParticiones;
 
+    // notas debajo de los campos de particiones fijas
+    private JLabel lblNotaParticionIguales, lblNotaParticionesDiferentes;
+    private static final Color NOTA_VERDE = new Color(80, 190, 120);
+    private static final Color NOTA_ROJO = new Color(230, 95, 95);
+
     private JDialog dialogConfig;
+    private Object[] valoresGuardadosConfig; // valores de la configuración al abrir la ventana
     private JDialog dialogEstadisticas;
 
     // Tablas
@@ -285,8 +308,60 @@ public class VentanaPrincipal extends JFrame {
         cbAjusteMemoria = new JComboBox<>(AJUSTES_DINAMICA);
         cbTamanoPagina = new JComboBox<>(TAMANOS_PAGINA);
         cbTamanoPagina.setSelectedItem(8);
-        spTamanoParticion = new JSpinner(new SpinnerNumberModel(16, 4, 1024, 4));
+        spTamanoParticion = new JSpinner(new SpinnerNumberModel(16, 1, SystemConfig.MEMORY_SIZE_MAX, 4));
         txtParticiones = new JTextField("8,16,32,64");
+
+        lblNotaParticionIguales = crearLabelNota();
+        lblNotaParticionesDiferentes = crearLabelNota();
+
+        // en el campo de particiones solo se pueden escribir números y comas
+        ((AbstractDocument) txtParticiones.getDocument()).setDocumentFilter(new DocumentFilter() {
+            @Override
+            public void insertString(FilterBypass fb, int offset, String texto, AttributeSet attr) throws BadLocationException {
+                if (texto != null && texto.matches("[0-9,]*")) {
+                    super.insertString(fb, offset, texto, attr);
+                }
+            }
+
+            @Override
+            public void replace(FilterBypass fb, int offset, int length, String texto, AttributeSet attrs) throws BadLocationException {
+                if (texto == null || texto.matches("[0-9,]*")) {
+                    super.replace(fb, offset, length, texto, attrs);
+                }
+            }
+        });
+
+        // las notas se actualizan al ir escribiendo
+        txtParticiones.getDocument().addDocumentListener(new DocumentListener() {
+            @Override
+            public void insertUpdate(DocumentEvent e) { actualizarNotasParticiones(); }
+
+            @Override
+            public void removeUpdate(DocumentEvent e) { actualizarNotasParticiones(); }
+
+            @Override
+            public void changedUpdate(DocumentEvent e) { actualizarNotasParticiones(); }
+        });
+
+        // el spinner avisa el cambio mientras se escribe, no solo al dar enter
+        JFormattedTextField campoParticion = ((JSpinner.DefaultEditor) spTamanoParticion.getEditor()).getTextField();
+        ((DefaultFormatter) campoParticion.getFormatter()).setCommitsOnValidEdit(true);
+
+        // si lo escrito no es válido el spinner no avisa, así que también se revisa el texto
+        campoParticion.getDocument().addDocumentListener(new DocumentListener() {
+            @Override
+            public void insertUpdate(DocumentEvent e) { SwingUtilities.invokeLater(() -> actualizarNotasParticiones()); }
+
+            @Override
+            public void removeUpdate(DocumentEvent e) { SwingUtilities.invokeLater(() -> actualizarNotasParticiones()); }
+
+            @Override
+            public void changedUpdate(DocumentEvent e) { SwingUtilities.invokeLater(() -> actualizarNotasParticiones()); }
+        });
+
+        spTamanoParticion.addChangeListener(e -> actualizarNotasParticiones());
+        spTamanoMemoria.addChangeListener(e -> actualizarNotasParticiones());
+        spLimiteKernel.addChangeListener(e -> actualizarNotasParticiones());
 
         cbEstrategiaMemoria.addActionListener(e -> actualizarParametrosMemoria());
 
@@ -318,7 +393,9 @@ public class VentanaPrincipal extends JFrame {
 
         JPanel cardAsignacion = crearCardFormulario(
             new String[]{"Asignación de memoria", "Ajuste", "Tamaño de página", "Tamaño de partición", "Particiones"},
-            new JComponent[]{cbEstrategiaMemoria, cbAjusteMemoria, cbTamanoPagina, spTamanoParticion, txtParticiones}
+            new JComponent[]{cbEstrategiaMemoria, cbAjusteMemoria, cbTamanoPagina,
+                crearCampoConNota(spTamanoParticion, lblNotaParticionIguales),
+                crearCampoConNota(txtParticiones, lblNotaParticionesDiferentes)}
         );
 
         JPanel panelCards = new JPanel(new GridLayout(1, 3, 10, 0));
@@ -335,7 +412,10 @@ public class VentanaPrincipal extends JFrame {
 
         JButton btnCancelar = new JButton("Cancelar");
         estilitarBotonSecundario(btnCancelar);
-        btnCancelar.addActionListener(e -> dialogConfig.dispose());
+        btnCancelar.addActionListener(e -> {
+            restaurarValoresConfig(); // lo que se cambió sin guardar se descarta
+            dialogConfig.dispose();
+        });
 
         btnGuardarConfig = crearBotonPrincipal("Guardar");
 
@@ -391,6 +471,97 @@ public class VentanaPrincipal extends JFrame {
         cbTamanoPagina.setEnabled("Paginación".equals(estrategia));
         spTamanoParticion.setEnabled("Partición fija (iguales)".equals(estrategia));
         txtParticiones.setEnabled("Partición fija (diferentes)".equals(estrategia));
+
+        actualizarNotasParticiones();
+    }
+
+    // campo con una nota pequeña debajo
+    private JPanel crearCampoConNota(JComponent campo, JLabel nota) {
+        JPanel panel = new JPanel(new BorderLayout(0, 4));
+        panel.setOpaque(false);
+        panel.add(campo, BorderLayout.CENTER);
+        panel.add(nota, BorderLayout.SOUTH);
+        return panel;
+    }
+
+    private JLabel crearLabelNota() {
+        JLabel nota = new JLabel();
+        nota.setFont(new Font("SansSerif", Font.PLAIN, 10));
+        nota.setVisible(false);
+        return nota;
+    }
+
+    // muestra la nota con el color indicado, o la oculta si el texto es null
+    private void mostrarNota(JLabel nota, String texto, Color color) {
+        if (texto == null) {
+            nota.setVisible(false);
+        } else {
+            nota.setText("<html><body style='width: 170px'>" + texto + "</body></html>");
+            nota.setForeground(color);
+            nota.setVisible(true);
+        }
+        if (dialogConfig != null) {
+            dialogConfig.getContentPane().revalidate();
+            dialogConfig.getContentPane().repaint();
+        }
+    }
+
+    // calcula las celdas que sobran según los valores que hay en la ventana de configuración
+    private void actualizarNotasParticiones() {
+        if (lblNotaParticionIguales == null || cbEstrategiaMemoria == null) {
+            return;
+        }
+
+        String estrategia = (String) cbEstrategiaMemoria.getSelectedItem();
+        int memoria = (Integer) spTamanoMemoria.getValue();
+        int kernel = (Integer) spLimiteKernel.getValue();
+        if (kernel % 2 != 0) {
+            kernel++; // SystemConfig redondea el kernel a par
+        }
+        int memoriaUsuario = memoria - kernel;
+
+        // particiones iguales
+        if ("Partición fija (iguales)".equals(estrategia)) {
+            int tamano = (Integer) spTamanoParticion.getValue();
+            JFormattedTextField campoParticion = ((JSpinner.DefaultEditor) spTamanoParticion.getEditor()).getTextField();
+            if (!campoParticion.isEditValid()) {
+                mostrarNota(lblNotaParticionIguales, "Error: El tamaño de partición debe ser un número entero mayor a 0", NOTA_ROJO);
+            } else if (tamano > memoriaUsuario) {
+                mostrarNota(lblNotaParticionIguales, "Error: El tamaño de partición es mayor que la memoria de usuario (" + memoriaUsuario + " celdas)", NOTA_ROJO);
+            } else {
+                int sobrante = memoriaUsuario % tamano;
+                if (sobrante > 0) {
+                    mostrarNota(lblNotaParticionIguales, "Nota: Sobrarán " + sobrante + " celdas con ese tamaño de partición", ORANGE);
+                } else {
+                    mostrarNota(lblNotaParticionIguales, "Nota: Todas las celdas se paginarán sin que sobre alguna", NOTA_VERDE);
+                }
+            }
+        } else {
+            mostrarNota(lblNotaParticionIguales, null, null);
+        }
+
+        // particiones diferentes
+        if ("Partición fija (diferentes)".equals(estrategia)) {
+            int[] lista = getParticionesSeleccionadas();
+            if (lista == null) {
+                mostrarNota(lblNotaParticionesDiferentes, "Error: Solo números enteros mayores a 0 separados por comas, sin comas seguidas ni al inicio o final. Ejemplo: 16,32,64", NOTA_ROJO);
+            } else {
+                int suma = 0;
+                for (int t : lista) {
+                    suma += t;
+                }
+                int sobrante = memoriaUsuario - suma;
+                if (sobrante < 0) {
+                    mostrarNota(lblNotaParticionesDiferentes, "Error: Las particiones suman " + suma + ", más que la memoria de usuario (" + memoriaUsuario + " celdas)", NOTA_ROJO);
+                } else if (sobrante > 0) {
+                    mostrarNota(lblNotaParticionesDiferentes, "Nota: Hay " + sobrante + " celdas que sobrarán según tus particiones actuales, como sugerencia, haz una partición extra con ese sobrante", ORANGE);
+                } else {
+                    mostrarNota(lblNotaParticionesDiferentes, "Nota: Todas las celdas quedan dentro de una partición sin que sobre alguna", NOTA_VERDE);
+                }
+            }
+        } else {
+            mostrarNota(lblNotaParticionesDiferentes, null, null);
+        }
     }
 
     private boolean algoritmoUsaQuantum(String algoritmo) {
@@ -968,11 +1139,25 @@ public class VentanaPrincipal extends JFrame {
                     c.setBackground(colorCPU);
                     c.setForeground(Color.WHITE);
                 } else {
+                    Color fondo;
                     if (row % 2 == 0) {
-                        c.setBackground(BG_CARD);
+                        fondo = BG_CARD;
                     } else {
-                        c.setBackground(new Color(28, 32, 38));
+                        fondo = new Color(28, 32, 38);
                     }
+
+                    // si la dirección pertenece a una partición, se pinta encima del fondo
+                    Object posicion = table.getValueAt(row, 0);
+                    if (posicion instanceof Integer) {
+                        Color colorParticion = coloresParticion.get((Integer) posicion);
+                        if (colorParticion == GRIS_DESPERDICIO) {
+                            fondo = mezclarColor(GRIS_DESPERDICIO, fondo, TRANSPARENCIA_DESPERDICIO);
+                        } else if (colorParticion != null) {
+                            fondo = mezclarColor(colorParticion, fondo, TRANSPARENCIA_PARTICION);
+                        }
+                    }
+
+                    c.setBackground(fondo);
                     c.setForeground(TEXT);
                 }
 
@@ -1471,6 +1656,88 @@ public class VentanaPrincipal extends JFrame {
     }
 
     /**
+     * Define las particiones fijas de la RAM y las pinta en la tabla de memoria.
+     * Cada partición lleva un color pastel distinto, y las celdas sobrantes
+     * que no completan una partición se pintan de gris.
+     * Para estrategias sin particiones (dinámica, paginación) se llama con null, null.
+     * @param inicios dirección de inicio de cada partición
+     * @param tamanos tamaño de cada partición (misma posición que en inicios)
+     */
+    public void actualizarColoresParticion(int[] inicios, int[] tamanos) {
+        this.inicioParticiones = inicios;
+        this.tamanoParticiones = tamanos;
+        recalcularColoresParticion();
+        tablaMemoria.repaint();
+    }
+
+    // pinta particiones fijas iguales: se calculan con inicio(i) = inicioUsuario + i * tamano
+    public void actualizarColoresParticionIguales(int tamano) {
+        int inicioUsuario = SystemConfig.getUserMemoryStart();
+        int tamanoUsuario = SystemConfig.getMemorySize() - inicioUsuario;
+        int cantidad = tamanoUsuario / tamano; // lo que sobra queda gris
+
+        int[] inicios = new int[cantidad];
+        int[] tamanos = new int[cantidad];
+        for (int i = 0; i < cantidad; i++) {
+            inicios[i] = inicioUsuario + i * tamano;
+            tamanos[i] = tamano;
+        }
+        actualizarColoresParticion(inicios, tamanos);
+    }
+
+    // pinta particiones fijas de tamaños diferentes: cada una empieza donde terminó la anterior
+    public void actualizarColoresParticionDiferentes(int[] lista) {
+        int inicio = SystemConfig.getUserMemoryStart();
+        int[] inicios = new int[lista.length];
+        for (int i = 0; i < lista.length; i++) {
+            inicios[i] = inicio;
+            inicio = inicio + lista[i];
+        }
+        actualizarColoresParticion(inicios, lista); // lo que sobra al final queda gris
+    }
+
+    // calcula el color de cada dirección de usuario según las particiones
+    private void recalcularColoresParticion() {
+        coloresParticion.clear();
+        if (inicioParticiones == null || tamanoParticiones == null || inicioParticiones.length == 0) {
+            return;
+        }
+
+        int finParticiones = SystemConfig.getUserMemoryStart();
+        for (int p = 0; p < inicioParticiones.length; p++) {
+            int inicio = inicioParticiones[p];
+            int fin = inicio + tamanoParticiones[p];
+            Color color = generarColorParticion(p);
+
+            for (int dir = inicio; dir < fin; dir++) {
+                coloresParticion.put(dir, color);
+            }
+            finParticiones = fin;
+        }
+
+        // sobrante: lo que queda después de la última partición
+        for (int dir = finParticiones; dir < SystemConfig.getMemorySize(); dir++) {
+            coloresParticion.put(dir, GRIS_DESPERDICIO);
+        }
+    }
+
+    // genera un color pastel distinto para cada partición, sirve aunque sean muchas
+    private Color generarColorParticion(int numero) {
+        // saltar el tono con la razón áurea deja colores bien separados entre particiones vecinas
+        float tono = (numero * 0.618034f) % 1f;
+        return Color.getHSBColor(tono, 0.45f, 0.70f);
+    }
+
+    // mezcla un color con el fondo para simular transparencia
+    // (Swing pinta mal los fondos con alpha en las tablas, así que se calcula la mezcla a mano)
+    private Color mezclarColor(Color color, Color fondo, float transparencia) {
+        int r = (int) (color.getRed() * transparencia + fondo.getRed() * (1 - transparencia));
+        int g = (int) (color.getGreen() * transparencia + fondo.getGreen() * (1 - transparencia));
+        int b = (int) (color.getBlue() * transparencia + fondo.getBlue() * (1 - transparencia));
+        return new Color(r, g, b);
+    }
+
+    /**
      * Actualiza la tabla del Disco secundario.
      * @param listaDisco Lista de arreglos de objetos: [Posición, Valor]
      */
@@ -1615,8 +1882,45 @@ public class VentanaPrincipal extends JFrame {
             abrirDialogoConfiguracion();
         }
         if (mostrar) {
+            guardarValoresConfig(); // para poder regresar a estos valores si se cancela
             dialogConfig.setVisible(true);
         }
+    }
+
+    // guarda los valores actuales de la ventana de configuración
+    private void guardarValoresConfig() {
+        valoresGuardadosConfig = new Object[]{
+            spTamanoMemoria.getValue(), spLimiteKernel.getValue(), spTamanoDisco.getValue(), spTamanoVirtual.getValue(),
+            spCantidadCPU.getValue(), cbAlgoritmoCPU.getSelectedItem(), spQuantum.getValue(),
+            spSelfishA.getValue(), spSelfishB.getValue(), spColasMLFQ.getValue(),
+            cbEstrategiaMemoria.getSelectedItem(), cbAjusteMemoria.getSelectedItem(), cbTamanoPagina.getSelectedItem(),
+            spTamanoParticion.getValue(), txtParticiones.getText()
+        };
+    }
+
+    // regresa la ventana de configuración a los valores guardados al abrirla
+    private void restaurarValoresConfig() {
+        if (valoresGuardadosConfig == null) {
+            return;
+        }
+        Object[] v = valoresGuardadosConfig;
+
+        // la RAM y el disco van antes porque cambian los límites del kernel y de la memoria virtual
+        spTamanoMemoria.setValue(v[0]);
+        spLimiteKernel.setValue(v[1]);
+        spTamanoDisco.setValue(v[2]);
+        spTamanoVirtual.setValue(v[3]);
+        spCantidadCPU.setValue(v[4]);
+        cbAlgoritmoCPU.setSelectedItem(v[5]);
+        spQuantum.setValue(v[6]);
+        spSelfishA.setValue(v[7]);
+        spSelfishB.setValue(v[8]);
+        spColasMLFQ.setValue(v[9]);
+        cbEstrategiaMemoria.setSelectedItem(v[10]);
+        cbAjusteMemoria.setSelectedItem(v[11]);
+        cbTamanoPagina.setSelectedItem(v[12]);
+        spTamanoParticion.setValue(v[13]);
+        txtParticiones.setText((String) v[14]);
     }
 
 
@@ -1653,6 +1957,12 @@ public class VentanaPrincipal extends JFrame {
     // retorna null si el texto no es válido
     public int[] getParticionesSeleccionadas() {
         String texto = txtParticiones != null ? txtParticiones.getText() : "8,16,32,64";
+
+        // solo números separados por una coma: sin comas seguidas, ni al inicio, ni al final
+        if (!texto.matches("\\d+(,\\d+)*")) {
+            return null;
+        }
+
         String[] partes = texto.split(",");
         int[] tamanos = new int[partes.length];
         try {

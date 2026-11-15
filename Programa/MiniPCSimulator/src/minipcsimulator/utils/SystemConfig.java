@@ -23,6 +23,8 @@ public class SystemConfig {
     //planif memoria
     private static String memoryStrategyAssignment = "dynamic"; // dynamic, paging, fixed_equal, fixed_different
     private static String memoryFit = "first";  // first, next, best
+    public static int partitionFixedEqualSize = 16;
+    public static int[] partitionFixedDifferentSizes = {16, 32, 64, 128};
 
     private static int diskSize = 512;
     private static int diskMemoryVirtualSize;
@@ -470,4 +472,30 @@ public class SystemConfig {
         return memoryFit;
     }
 
+    public static void setPartitionFixedEqualSize(int partitionFixedEqualSize) {
+        /* PENDIENTE HACER DESPUES P2 
+        if (partitionFixedEqualSize < PARTITION_FIXED_EQUAL_SIZE_MIN
+                || partitionFixedEqualSize > PARTITION_FIXED_EQUAL_SIZE_MAX) {
+            throw new IllegalArgumentException(
+                "El tamaño de la partición fija debe estar entre "
+                + PARTITION_FIXED_EQUAL_SIZE_MIN
+                + " y "
+                + PARTITION_FIXED_EQUAL_SIZE_MAX
+            );
+        }
+        */
+        SystemConfig.partitionFixedEqualSize = partitionFixedEqualSize;
+    }
+
+    public static int getPartitionFixedEqualSize() {
+        return partitionFixedEqualSize;
+    }
+
+    public static void setPartitionFixedDifferentSize(int[] sizes) {
+        SystemConfig.partitionFixedDifferentSizes = sizes;
+    }
+
+    public static int[] getPartitionFixedDifferentSize() {
+        return partitionFixedDifferentSizes;
+    }
 }

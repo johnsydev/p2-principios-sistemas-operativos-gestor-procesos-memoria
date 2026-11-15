@@ -118,8 +118,8 @@ public class MiniPCController {
             @Override
             public void actionPerformed(ActionEvent e) {
                 System.out.println("Guardando configuraciones...");
-                aplicarConfiguraciones();
-                if (vista.getDialogConfig() != null) {
+                boolean valida = aplicarConfiguraciones();
+                if (valida && vista.getDialogConfig() != null) {
                     vista.getDialogConfig().dispose();
                 }
             }
@@ -746,7 +746,7 @@ public class MiniPCController {
     /**
      * Aplica las configuraciones seleccionadas por el usuario.
      */
-    private void aplicarConfiguraciones() {
+    private boolean aplicarConfiguraciones() {
         System.out.println("CONFIGURANDO...");
         int memorySize = vista.getTamanoMemoriaSeleccionado();
         int kernelSize = vista.getLimiteKernelSeleccionado();
@@ -786,7 +786,36 @@ public class MiniPCController {
             vista.mostrarError(
                 "Rango de configuración inválido."
             );
-            return;
+            return false;
+        }
+
+        // validaciones de la asignación de memoria (antes de aplicar nada)
+        String estrategiaElegida = vista.getEstrategiaMemoriaSeleccionada();
+        int kernelPar = (kernelSize % 2 != 0) ? kernelSize + 1 : kernelSize; // SystemConfig redondea el kernel a par
+        int userMemorySize = memorySize - kernelPar;
+
+        if (estrategiaElegida.equals("Partición fija (iguales)")) {
+            int tamanoParticion = vista.getTamanoParticionSeleccionado();
+            if (tamanoParticion > userMemorySize) {
+                vista.mostrarError("El tamaño de partición (" + tamanoParticion + ") no puede ser mayor que la memoria de usuario (" + userMemorySize + " celdas).");
+                return false;
+            }
+        }
+
+        if (estrategiaElegida.equals("Partición fija (diferentes)")) {
+            int[] lista = vista.getParticionesSeleccionadas();
+            if (lista == null) {
+                vista.mostrarError("La lista de particiones no es válida. Use números enteros mayores a 0 separados por comas, por ejemplo 16,32,64.");
+                return false;
+            }
+            int suma = 0;
+            for (int t : lista) {
+                suma += t;
+            }
+            if (suma > userMemorySize) {
+                vista.mostrarError("Las particiones suman " + suma + ", más que la memoria de usuario (" + userMemorySize + " celdas).");
+                return false;
+            }
         }
 
         SystemConfig.setMemorySize(memorySize);
@@ -797,6 +826,19 @@ public class MiniPCController {
 
         SystemConfig.setMemoryStrategyAssignment(vista.getEstrategiaMemoriaSeleccionada());
         SystemConfig.setMemoryFit(vista.getAjusteMemoriaSeleccionado());
+        SystemConfig.setPartitionFixedEqualSize(vista.getTamanoParticionSeleccionado());
+        if (estrategiaElegida.equals("Partición fija (diferentes)")) {
+            SystemConfig.setPartitionFixedDifferentSize(vista.getParticionesSeleccionadas()); // solo si es válida
+        }
+
+        String estrategia = SystemConfig.getMemoryStrategyAssignment();
+        if (estrategia.equals("fixed_equal")) {
+            vista.actualizarColoresParticionIguales(vista.getTamanoParticionSeleccionado());
+        } else if (estrategia.equals("fixed_different")) {
+            vista.actualizarColoresParticionDiferentes(vista.getParticionesSeleccionadas());
+        } else {
+            vista.actualizarColoresParticion(null, null); // dinámica o paginación: sin colores
+        }
 
         this.memory = null; //sacamos memoria vieja
         this.cpu = null; //sacamos cpu vieja
@@ -829,6 +871,7 @@ public class MiniPCController {
 
         System.out.println("Configuraciones aplicadas correctamente.");
         vista.mostrarInfo("Configuraciones aplicadas correctamente.");
+        return true;
     }
 
     /**

@@ -317,6 +317,61 @@ public class Loader {
                             "Se requerían " + size + " celdas libres.");
     }
 
+    private static int getFreeSpaceInMemory_fixed_equal(int size, MainMemory memory) throws Exception {
+        int userMemoryStart = SystemConfig.getUserMemoryStart();
+        int totalMemorySize = SystemConfig.getMemorySize();
+        int partitionSize = SystemConfig.getPartitionFixedEqualSize();
+
+        if (partitionSize < size) {
+            throw new Exception("El proceso es más grande que las particiones de la Memoria Principal. " +
+                            "Se requerían " + size + " celdas libres y las particiones son de " + partitionSize + " celdas.");
+        }
+
+        for (int i = userMemoryStart; (i+partitionSize) <= totalMemorySize; i+=partitionSize) {
+            // Verificamos si la celda actual en la memoria está libre
+            if (memory.getPosition(i) == null) {
+                return i;
+            }
+        }
+
+        throw new Exception("No hay espacio libre contiguo suficiente en las particiones de la Memoria Principal. " +
+                            "Se requerían " + size + " celdas libres.");
+    }
+
+    private static int getFreeSpaceInMemory_fixed_different(int size, MainMemory memory) throws Exception {
+        int userMemoryStart = SystemConfig.getUserMemoryStart();
+        int totalMemorySize = SystemConfig.getMemorySize();
+        int[] partitionsSize = SystemConfig.getPartitionFixedDifferentSize();
+
+        int bestIndex = -1;
+        int bestDiffSize = -1;
+
+        int row = userMemoryStart;
+
+        for (int i = 0; i < partitionsSize.length; i++) {
+            if (row + partitionsSize[i] > totalMemorySize) {
+                break;
+            }
+
+            // Verificamos si la celda actual en la memoria está libre
+            if (memory.getPosition(row) == null && partitionsSize[i] >= size) {
+                int diff = partitionsSize[i] - size;
+                if (bestIndex == -1 || diff < bestDiffSize) {
+                    bestIndex = row;
+                    bestDiffSize = diff;
+                }
+            }
+            row += partitionsSize[i];
+        }
+
+        if (bestIndex != -1) {
+            return bestIndex;
+        }
+
+        throw new Exception("No hay espacio libre contiguo suficiente en las particiones de la Memoria Principal. " +
+                            "Se requerían " + size + " celdas libres.");
+    }
+
     /**
      * Busca un bloque continuo de celdas libres en la Memoria Principal (RAM) a partir de la
      * dirección reservada para programas de usuario.
@@ -329,21 +384,24 @@ public class Loader {
     public static int getFreeSpaceInMemory(int size, MainMemory memory) throws Exception {
         
         switch(SystemConfig.getMemoryStrategyAssignment()) {
-            case "dynamic":
+            case "fixed_equal":
+                return getFreeSpaceInMemory_fixed_equal(size, memory);
+            case "fixed_different":
+                return getFreeSpaceInMemory_fixed_different(size, memory);
+            default: // dynamic
                 switch(SystemConfig.getMemoryFit()) {
-                    case "first":
-                        return getFreeSpaceInMemory_first_next_Fit(size, memory, "first");
                     case "next":
                         return getFreeSpaceInMemory_first_next_Fit(size, memory, "next");
                     case "best":
                         return getFreeSpaceInMemory_bestFit(size, memory);
+                    default:
+                        return getFreeSpaceInMemory_first_next_Fit(size, memory, "first");
                 }
         }
-        
 
         // Si después de recorrer toda la memoria no se encontró un bloque contiguo suficiente
-        throw new Exception("No hay espacio libre contiguo suficiente en la Memoria Principal. " +
-                            "Se requerían " + size + " celdas libres.");
+        //throw new Exception("No hay espacio libre contiguo suficiente en la Memoria Principal. " +
+        //                    "Se requerían " + size + " celdas libres.");
     }
 
     
