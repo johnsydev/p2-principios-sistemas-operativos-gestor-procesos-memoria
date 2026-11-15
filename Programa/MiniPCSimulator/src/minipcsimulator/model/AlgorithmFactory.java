@@ -11,7 +11,7 @@ public class AlgorithmFactory {
             case "HRRN":                  return new HRRNAlgorithm();
             case "Lottery":               return new LotteryAlgorithm(quantum);
             case "Por Prioridad":         return new PriorityAlgorithm(false);
-            case "Guaranteed Scheduling": return new GuaranteedAlgorithm(quantum);
+            case "Guaranteed Scheduling": return new GuaranteedAlgorithm();
             case "Multilevel Feedback Queue": return new MLFQAlgorithm(quantum, niveles);
             default:                      return new FCFSAlgorithm(); 
         }

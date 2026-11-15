@@ -659,6 +659,19 @@ public class MiniPCController {
 
             // Expulsión: solo si el algoritmo es expulsivo, hay un proceso corriendo y alguien espera
             ArrayList<Process> ready = scheduler.getReadyList(i);
+            if (aCpu.getPCB() != null) {
+                int quantum = algorithm.getQuantum();
+                if (quantum > 0 && aCpu.getQuantumCounter() >= quantum) {
+                    Process enCPU = processList.getProcessByPID(aCpu.getPCB().getPID());
+                    if (enCPU != null && !ready.isEmpty()) {
+                        algorithm.onQuantumExpired(enCPU); // solo baja de cola si alguien más espera
+                        expulsarDeCPU(aCpu, enCPU);
+                    } else {
+                        aCpu.resetQuantumCounter(); // está solo: sigue con un quantum nuevo
+                    }
+                }
+            }
+
             if (aCpu.getPCB() != null && algorithm.isPreemptive() && !ready.isEmpty()) {
                 Process running = processList.getProcessByPID(aCpu.getPCB().getPID());
 
@@ -710,21 +723,8 @@ public class MiniPCController {
             } else if (status == ProcessState.BLOCKED) {
                 aCpu.setPCB(null);
             } else {
-                // si el proceso sigue corriendo, se verifica el quantum
                 aCpu.incrementQuantumCounter();
-                int quantum = algorithm.getQuantum();
-                boolean quantumAgotado = quantum > 0 && aCpu.getQuantumCounter() >= quantum;
-
-                if (quantumAgotado && actual != null) {
-                    algorithm.onQuantumExpired(actual);   // notifica al algoritmo que el quantum se agotó para el proceso actual
-                }
-
-                if (quantumAgotado && actual != null && !scheduler.getReadyList(i).isEmpty()) {
-                    expulsarDeCPU(aCpu, actual);
-                } else {
-                    if (quantumAgotado) aCpu.resetQuantumCounter();
-                    Dispatcher.saveContext(null, aCpu, memory);
-                }
+                Dispatcher.saveContext(null, aCpu, memory);
             }
         }
 
