@@ -59,6 +59,9 @@ public class MiniPCController {
     private FileSystem fileSystem;
     private ArrivalQueue arrivalQueue;
     private SchedulingAlgorithm algorithm = new FCFSAlgorithm();
+    private boolean selfishActivo = false;
+    private int selfishA = 2;
+    private int selfishB = 1;
     
     //hora de inicio
     private LocalDateTime startTimeSimulation;
@@ -605,6 +608,10 @@ public class MiniPCController {
         scheduler.addToReadyList(p);
     }
 
+    private void aplicarSelfishAlScheduler() {
+        scheduler.setSelfish(selfishActivo, selfishA, selfishB);
+    }
+
     public void aceptarProgramasNuevos() {
         List<PendingProgram> arrivedPrograms = arrivalQueue.getArrivedPrograms(systemClock.getTicks());
         for (PendingProgram p : arrivedPrograms) {
@@ -667,6 +674,7 @@ public class MiniPCController {
             }
 
             if (aCpu.getPCB() == null) {
+                scheduler.admitIfNoAccepted(i);
                 Process nextProcess = Dispatcher.selectNext(
                         scheduler.getReadyList(i), algorithm, systemClock.getTicks());
                 if (nextProcess == null) continue; // ocioso
@@ -686,11 +694,16 @@ public class MiniPCController {
                 continue;
             }
 
-            if (actual != null) actual.decrementBurstTime();
+            if (actual != null) {
+                actual.decrementBurstTime();
+                actual.addCpuTime(1);
+            }
 
             if (aCpu.getPCB() == null) continue;
 
             ProcessState status = aCpu.getPCB().getState();
+            Process corriendo = (status == ProcessState.EXIT || status == ProcessState.BLOCKED) ? null : actual;
+            scheduler.updateSelfish(i, corriendo);
             if (status == ProcessState.EXIT) {
                 processList.removeProcess(aCpu.getPCB().getPID());
                 aCpu.setPCB(null);
@@ -701,6 +714,10 @@ public class MiniPCController {
                 aCpu.incrementQuantumCounter();
                 int quantum = algorithm.getQuantum();
                 boolean quantumAgotado = quantum > 0 && aCpu.getQuantumCounter() >= quantum;
+
+                if (quantumAgotado && actual != null) {
+                    algorithm.onQuantumExpired(actual);   // notifica al algoritmo que el quantum se agotó para el proceso actual
+                }
 
                 if (quantumAgotado && actual != null && !scheduler.getReadyList(i).isEmpty()) {
                     expulsarDeCPU(aCpu, actual);
@@ -862,6 +879,18 @@ public class MiniPCController {
             }
         }
 
+        // Selfish Round Robin: a debe ser mayor o igual que b
+        if ("Selfish Round Robin".equals(vista.getAlgoritmoCPUSeleccionado())) {
+            int a = vista.getSelfishASeleccionado();
+            int b = vista.getSelfishBSeleccionado();
+
+            if (a < b) {
+                vista.mostrarError("En Selfish Round Robin, a (" + a + ") no puede ser menor que b (" + b + ").");
+                return false;
+            }
+        }
+        
+
         SystemConfig.setMemorySize(memorySize);
         SystemConfig.setUserMemoryStart(kernelSize);
         SystemConfig.setDiskSize(diskSize);
@@ -912,10 +941,15 @@ public class MiniPCController {
         vista.configurarCantidadCPU(cantidad);
 
         this.algorithm = AlgorithmFactory.create(
-            vista.getAlgoritmoCPUSeleccionado(), vista.getQuantumSeleccionado()
+            vista.getAlgoritmoCPUSeleccionado(), vista.getQuantumSeleccionado(), vista.getColasMLFQSeleccionadas()
         );
         System.out.println("Algoritmo: " + vista.getAlgoritmoCPUSeleccionado()
             + " | quantum: " + algorithm.getQuantum());
+
+        selfishActivo = "Selfish Round Robin".equals(vista.getAlgoritmoCPUSeleccionado());
+        selfishA = vista.getSelfishASeleccionado();
+        selfishB = vista.getSelfishBSeleccionado();
+        aplicarSelfishAlScheduler();
 
         this.cpu = this.cpus.get(0);
 
@@ -949,6 +983,7 @@ public class MiniPCController {
         this.processList = new ProcessList(this.memory);
 
         this.scheduler = new Scheduler(this.jobList, this.processList, this.memory, this.disk, this.systemClock, SystemConfig.getNumCPUs());
+        aplicarSelfishAlScheduler();
         this.interruptHandler = new InterruptHandler(this.memory, this.processList, this.scheduler, this.fileSystem);
 
         this.cpus = new ArrayList<>(); // ponemos cpus nuevos

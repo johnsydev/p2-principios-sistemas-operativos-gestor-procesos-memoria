@@ -3,6 +3,7 @@ package minipcsimulator.model;
 import java.util.ArrayList;
 import minipcsimulator.model.Process.ProcessState;
 import minipcsimulator.utils.SystemConfig;
+import java.util.Iterator;
 
 public class Scheduler {
     private JobList jobList;
@@ -12,6 +13,12 @@ public class Scheduler {
     private SystemClock systemClock;
 
     private ArrayList<ArrayList<Process>> readyLists = new ArrayList<>();
+    
+    //Atributos para Selfish RR
+    private ArrayList<ArrayList<Process>> newLists = new ArrayList<>();
+    private boolean selfish = false;
+    private double selfishA = 2;
+    private double selfishB = 1;
 
     public Scheduler(JobList jobList, ProcessList processList, MainMemory memory, Disk disk, SystemClock systemClock, int numCPUs) {
         this.jobList = jobList;
@@ -23,7 +30,10 @@ public class Scheduler {
         // una lista de listos por CPU
         for (int i = 0; i < numCPUs; i++) {
             readyLists.add(new ArrayList<>());
+            newLists.add(new ArrayList<>());
         }
+
+        
     }
 
     public void addToReadyList(Process process) {
@@ -90,7 +100,7 @@ public class Scheduler {
                     Loader.loadToMemory(process, memory, disk);
 
                     processList.addProcess(process);
-                    addToReadyList(process);
+                    admit(process);
 
                 } else {
                     int virtualMemoryAddress = -1;
@@ -118,7 +128,7 @@ public class Scheduler {
                     Loader.loadToVirtualMemory(process, disk);
 
                     processList.addProcess(process);
-                    addToReadyList(process);
+                    admit(process);
                     System.out.println("Proceso PID " + process.getPCB().getPID() + " admitido en estado READY/SUSPEND (Cargado en Memoria Virtual).");
                 }
 
@@ -129,6 +139,62 @@ public class Scheduler {
                     memory.setPosition(addrInRAM + 1, null);
                 }
                 
+            }
+        }
+    }
+
+    public void setSelfish(boolean selfish, double a, double b) {
+        this.selfish = selfish;
+        this.selfishA = a;
+        this.selfishB = b;
+    }
+
+    // En selfish, los procesos recién admitidos esperan en la cola de nuevos
+    private void admit(Process process) {
+        if (selfish) {
+            newLists.get(process.getAssignedCpuId() - 1).add(process);
+        } else {
+            addToReadyList(process);
+        }
+    }
+
+    // Si no hay ningún aceptado, entra el nuevo de mayor prioridad (empate: el primero de la lista)
+    public void admitIfNoAccepted(int cpuIndex) {
+        if (!selfish) return;
+        ArrayList<Process> ready = readyLists.get(cpuIndex);
+        ArrayList<Process> nuevos = newLists.get(cpuIndex);
+        if (!ready.isEmpty() || nuevos.isEmpty()) return;
+
+        Process best = nuevos.get(0);
+        for (Process p : nuevos) {
+            if (p.getSelfishPriority() > best.getSelfishPriority()) best = p;
+        }
+        nuevos.remove(best);
+        ready.add(best);
+    }
+
+    // Una vez por tick y por CPU: sube prioridades y promueve a los nuevos que alcanzan a los aceptados
+    public void updateSelfish(int cpuIndex, Process running) {
+        if (!selfish) return;
+        ArrayList<Process> ready = readyLists.get(cpuIndex);
+        ArrayList<Process> nuevos = newLists.get(cpuIndex);
+
+        for (Process p : nuevos) p.addSelfishPriority(selfishA);
+        for (Process p : ready) p.addSelfishPriority(selfishB);
+        if (running != null) running.addSelfishPriority(selfishB);
+
+        boolean hayAceptados = running != null || !ready.isEmpty();
+        double max = (running != null) ? running.getSelfishPriority() : -1;
+        for (Process p : ready) max = Math.max(max, p.getSelfishPriority());
+
+        Iterator<Process> it = nuevos.iterator();
+        while (it.hasNext()) {
+            Process p = it.next();
+            if (!hayAceptados || p.getSelfishPriority() >= max) {
+                it.remove();
+                ready.add(p); // entra al final de la cola
+                hayAceptados = true;
+                max = Math.max(max, p.getSelfishPriority());
             }
         }
     }

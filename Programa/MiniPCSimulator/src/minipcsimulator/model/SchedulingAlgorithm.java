@@ -18,4 +18,6 @@ public interface SchedulingAlgorithm {
     default int getQuantum() {
         return 0;
     }
+
+    default void onQuantumExpired(Process p) { }
 }

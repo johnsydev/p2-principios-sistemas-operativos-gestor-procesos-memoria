@@ -40,6 +40,9 @@ public class Process {
     private ProcessState state;
     private int burstTime;
     private int arrivalTime;
+    private int cpuTime; 
+    private int selfishPriority; // Prioridad para Selfish Round Robin (SRR)
+    private int level = 0; // Nivel de prioridad para Multi-Level Feedback Queue (MLFQ)
 
     private int pid;
 
@@ -147,5 +150,29 @@ public class Process {
 
     public int getAssignedCpuId() {
         return assignedCpuId;
+    }
+
+    public int getCpuTime() { 
+        return cpuTime; 
+    }
+
+    public void addCpuTime(int ticks) { 
+        cpuTime += ticks; 
+    }
+
+    public double getSelfishPriority() { 
+        return selfishPriority; 
+    }
+
+    public void addSelfishPriority(double priority) {
+        selfishPriority += priority;
+    }
+
+    public int getLevel() { 
+        return level; 
+    }
+    
+    public void setLevel(int level) { 
+        this.level = level; 
     }
 }
