@@ -176,18 +176,80 @@ public class CPU {
     }
 
     /**
+     * Convierte un número de instrucción (lógico) a la celda real en RAM (física),
+     * usando la tabla de páginas del PCB si hay paginación.
+     * @param logical El número de instrucción dentro del programa.
+     * @return La celda en RAM, o -1 si la instrucción no existe en el programa.
+     */
+    private int logicalToPhysical(int logical) {
+        if (logical < 0 || logical >= pcb.getDiskProgramSize()) {
+            return -1;
+        }
+
+        // sin paginación el programa está seguido desde startPosition
+        ArrayList<Integer> pagesTable = pcb.getFramesTable();
+        if (pagesTable.isEmpty()) {
+            return pcb.getStartPosition() + logical;
+        }
+
+        int pageSize = SystemConfig.getPagingSize();
+        int page = logical / pageSize;
+        int offset = logical % pageSize;
+        return SystemConfig.getUserMemoryStart() + pagesTable.get(page) * pageSize + offset;
+    }
+
+    /**
+     * Convierte una celda real en RAM (física) al número de instrucción (lógico),
+     * usando la tabla de páginas del PCB si hay paginación.
+     * @param physical La celda en RAM.
+     * @return El número de instrucción, o -1 si la celda no es de este proceso.
+     */
+    private int physicalToLogical(int physical) {
+        // sin paginación es solo restar el inicio
+        ArrayList<Integer> pagesTable = pcb.getFramesTable();
+        if (pagesTable.isEmpty()) {
+            int logical = physical - pcb.getStartPosition();
+            if (logical < 0 || logical >= pcb.getDiskProgramSize()) {
+                return -1;
+            }
+            return logical;
+        }
+
+        int userStart = SystemConfig.getUserMemoryStart();
+        int pageSize = SystemConfig.getPagingSize();
+        if (physical < userStart) {
+            return -1;
+        }
+        int frame = (physical - userStart) / pageSize;
+        int offset = (physical - userStart) % pageSize;
+
+        // buscar qué página está en ese marco
+        for (int page = 0; page < pagesTable.size(); page++) {
+            if (pagesTable.get(page) == frame) {
+                int logical = page * pageSize + offset;
+                if (logical >= pcb.getDiskProgramSize()) {
+                    return -1; // celda vacía de la última página (fragmentación interna)
+                }
+                return logical;
+            }
+        }
+        return -1; // ese marco no es de este proceso
+    }
+
+    /**
      * Obtiene la instrucción que se debe ejecutar del proceso actualmente en ejecución en el CPU, mediante el PC.
      * Si el PC está fuera del rango de memoria del proceso, se asume que el proceso ha terminado y se cambia su estado a EXIT.
      */
     public void fetch() {
-        if (PC >= pcb.getStartPosition() && PC < pcb.getEndPosition()) {
-            this.IR = memory.getInstruction(PC);
-            this.currentInstructionAddress = this.PC;
-            this.PC++;
-        } else {
+        int logical = physicalToLogical(PC);
+        if (logical == -1) {
             pcb.setState(Process.ProcessState.EXIT);
             throw new RuntimeException("Error: PC fuera del rango de memoria del proceso. (Segmentation Fault)");
         }
+
+        this.IR = memory.getInstruction(PC);
+        this.currentInstructionAddress = this.PC;
+        this.PC++;
     }
 
     /**
@@ -655,11 +717,13 @@ public class CPU {
      * @param countPositions Desplazamiento de posiciones a realizar en el PC (positivo o negativo).
      */
     public void executeJMP(int countPositions) {
-        int newPC = this.PC + countPositions;
-        if (newPC >= pcb.getStartPosition() && newPC < pcb.getEndPosition()) {
+        int logical = physicalToLogical(this.currentInstructionAddress) + 1;
+        int newPC = logicalToPhysical(logical + countPositions);
+
+        if (newPC != -1) {
             this.PC = newPC;
         } else {
-            pcb.setState(Process.ProcessState.EXIT); // PENDIENTE SEGMENTATION FAULT
+            pcb.setState(Process.ProcessState.EXIT);
             throw new RuntimeException("Error: Dirección de salto fuera del rango del proceso (Segmentation Fault).");
         }
     }

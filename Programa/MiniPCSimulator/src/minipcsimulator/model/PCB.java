@@ -17,6 +17,9 @@ public class PCB {
     private int startPosition;
     private int sizeProcessScope;
     private int endPosition;
+
+    // Para paginación
+    private ArrayList<Integer> pagesTable = new ArrayList<>();
     
     // Información del PCB
     private int PID = 0;
@@ -285,6 +288,26 @@ public class PCB {
 
     public String getStringOpenedFiles() {
         return String.join(", ", openedFiles);
+    }
+
+    public void setFramesTable(ArrayList<Integer> framesTable) {
+        this.pagesTable = framesTable;
+    }
+
+    public ArrayList<Integer> getFramesTable() {
+        return pagesTable;
+    }
+
+    public String getPagesTableString() {
+        if (pagesTable.isEmpty()) {
+            return "-";
+        }
+
+        String pagesTableString = "";
+        for (Integer page : pagesTable) {
+            pagesTableString += page + ", ";
+        }
+        return pagesTableString.substring(0, pagesTableString.length() - 2);
     }
 
     public void setNextPCB(PCB nextPCB) {

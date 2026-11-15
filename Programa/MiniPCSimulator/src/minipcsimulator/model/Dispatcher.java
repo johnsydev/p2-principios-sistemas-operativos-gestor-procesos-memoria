@@ -80,6 +80,7 @@ public class Dispatcher {
         int start_time = pcb.getStartTime();
         int spent_time = pcb.getTimeSpent();
         int base_address = pcb.getStartPosition();
+        String pages_table = pcb.getPagesTableString();
         int size_scope = pcb.getSizeProcessScope();
         int priority = pcb.getPriority();
 
@@ -111,7 +112,11 @@ public class Dispatcher {
         
         memory.setPosition(memoryPosition + 12 + SystemConfig.STACK_SIZE, new MemoryRegister("bcp_opened_files = " + openedFiles, 0)); //PENDIENTE
         memory.setPosition(memoryPosition + 13 + SystemConfig.STACK_SIZE, new MemoryRegister("bcp_next_bcp = " + "null", ""));
-        memory.setPosition(memoryPosition + 14 + SystemConfig.STACK_SIZE, new MemoryRegister("bcp_base_address = " + base_address, base_address));
+        if (SystemConfig.getMemoryStrategyAssignment().equals("paging")) {
+            memory.setPosition(memoryPosition + 14 + SystemConfig.STACK_SIZE, new MemoryRegister("bcp_pages_table = " + pages_table, pages_table));
+        } else {
+            memory.setPosition(memoryPosition + 14 + SystemConfig.STACK_SIZE, new MemoryRegister("bcp_base_address = " + base_address, base_address));
+        }
         memory.setPosition(memoryPosition + 15 + SystemConfig.STACK_SIZE, new MemoryRegister("bcp_size_scope = " + size_scope, size_scope));
 
         memory.setPosition(memoryPosition + 16 + SystemConfig.STACK_SIZE, new MemoryRegister("bcp_priority = " + priority, priority));

@@ -10,6 +10,17 @@ import minipcsimulator.utils.SystemConfig;
 public class Loader {
 
     private static int nextFitIndex = SystemConfig.getUserMemoryStart();
+    public static ArrayList<Integer> temporalFrames = new ArrayList<>();
+
+    public static void setTemporalFrames(ArrayList<Integer> frames) {
+        temporalFrames = frames;
+    }
+
+    public static ArrayList<Integer> getTemporalFrames() {
+        ArrayList<Integer> tmp = new ArrayList<>(Loader.temporalFrames);
+        Loader.temporalFrames = new ArrayList<>();
+        return tmp;
+    }
 
     public static void resetNextFitIndex() {
         nextFitIndex = SystemConfig.getUserMemoryStart();
@@ -90,13 +101,33 @@ public class Loader {
         try {
             int position = getFreeSpaceInMemory(size, memory); // posición inicio en RAM, i y position son RAM
             Loader.setNextFitIndex(position, size);
+            int userMemoryStart = SystemConfig.getUserMemoryStart();
 
-            for (int i = position; i < position + size; i++) {
-                Instruction instruction = disk.getInstruction(startAddressDisk);
-                memory.setPositionInstruction(i, instruction);
+            if (SystemConfig.getMemoryStrategyAssignment().equals("paging")) {
+                ArrayList<Integer> frames = Loader.getTemporalFrames();
+                int pageSize = SystemConfig.getPagingSize();
+                int copied = 0;
+                for (Integer frame : frames) {
+                    int index = userMemoryStart + pageSize * frame;
+                    for (int i = index; i < index + pageSize; i++) {
+                        if (copied >= size) break;
+                        Instruction instruction = disk.getInstruction(startAddressDisk);
+                        memory.setPositionInstruction(i, instruction);
 
-                instructions.add(instruction);
-                startAddressDisk++;
+                        instructions.add(instruction);
+                        startAddressDisk++;
+                        copied++;
+                    }
+                }
+                process.getPCB().setFramesTable(frames);
+            } else {
+                for (int i = position; i < position + size; i++) {
+                    Instruction instruction = disk.getInstruction(startAddressDisk);
+                    memory.setPositionInstruction(i, instruction);
+
+                    instructions.add(instruction);
+                    startAddressDisk++;
+                }
             }
         } catch (Exception e) {
             throw new RuntimeException("Error al cargar el programa en memoria: " + e.getMessage());
@@ -147,22 +178,50 @@ public class Loader {
             int newRamPosition = getFreeSpaceInMemory(size, memory);
             Loader.setNextFitIndex(newRamPosition, size);
 
-            // mueve instrucciones de memoria virtual a RAM y limpia memoria virtual
-            for (int i = 0; i < size; i++) {
-                int currentVirtualAddr = startVirtualAddress + i;
-                int currentRamAddr = newRamPosition + i;
+            int userMemoryStart = SystemConfig.getUserMemoryStart();
 
-                Instruction instruction = disk.getInstruction(currentVirtualAddr);
-                memory.setPositionInstruction(currentRamAddr, instruction);
-                instructions.add(instruction);
+            if (SystemConfig.getMemoryStrategyAssignment().equals("paging")) {
+                ArrayList<Integer> frames = Loader.getTemporalFrames();
+                int pageSize = SystemConfig.getPagingSize();
+                int copied = 0;
+                for (Integer frame : frames) {
+                    int index = userMemoryStart + pageSize * frame;
+                    for (int i = index; i < index + pageSize; i++) {
+                        if (copied >= size) break;
+                        Instruction instruction = disk.getInstruction(startVirtualAddress);
 
-                disk.setPosition(currentVirtualAddr, null);
+                        memory.setPositionInstruction(i, instruction);
+                        instructions.add(instruction);
+
+                        disk.setPosition(startVirtualAddress, null);
+
+                        startVirtualAddress++;
+                        copied++;
+                    }
+                }
+                process.getPCB().setFramesTable(frames);
+                process.getPCB().setStartPosition(newRamPosition);
+                process.getPCB().setPC(newRamPosition);
+                process.setInstructions(instructions);
+            } else {
+
+                // mueve instrucciones de memoria virtual a RAM y limpia memoria virtual
+                for (int i = 0; i < size; i++) {
+                    int currentVirtualAddr = startVirtualAddress + i;
+                    int currentRamAddr = newRamPosition + i;
+
+                    Instruction instruction = disk.getInstruction(currentVirtualAddr);
+                    memory.setPositionInstruction(currentRamAddr, instruction);
+                    instructions.add(instruction);
+
+                    disk.setPosition(currentVirtualAddr, null);
+                }
+
+                // actualiza PCB
+                process.getPCB().setStartPosition(newRamPosition);
+                process.getPCB().setPC(newRamPosition); // Seteamos el PC al inicio en RAM
+                process.setInstructions(instructions);   // Internamente ejecuta configEndPosition(size)
             }
-
-            // actualiza PCB
-            process.getPCB().setStartPosition(newRamPosition);
-            process.getPCB().setPC(newRamPosition); // Seteamos el PC al inicio en RAM
-            process.setInstructions(instructions);   // Internamente ejecuta configEndPosition(size)
 
         } catch (Exception e) {
             throw new RuntimeException("Error al cargar el programa desde memoria virtual a memoria principal: " + e.getMessage());
@@ -372,6 +431,33 @@ public class Loader {
                             "Se requerían " + size + " celdas libres.");
     }
 
+    private static ArrayList<Integer> getFreeSpaceInMemory_paging(int size, MainMemory memory) throws Exception {
+        int userMemoryStart = SystemConfig.getUserMemoryStart();
+        int totalMemorySize = SystemConfig.getMemorySize();
+        int pagingSize = SystemConfig.getPagingSize();
+
+        int missingSpace = size;
+        ArrayList<Integer> framesIndexes = new ArrayList<>();
+
+        int idx = 0;
+        for (int i = userMemoryStart; (i+pagingSize) <= totalMemorySize; i+=pagingSize) {
+            // Verificamos si la celda actual en la memoria está libre
+            if (memory.getPosition(i) == null) {
+                framesIndexes.add(idx);
+
+                missingSpace-=pagingSize;
+                if (missingSpace <= 0) {
+                    return framesIndexes;
+                }
+            }
+
+            idx++;
+        }
+
+        throw new Exception("No hay espacio libre suficiente en los marcos disponibles de la Memoria Principal. " +
+                            "Se requerían " + size + " celdas libres, es decir, " + (int) Math.ceil((double) size/pagingSize) + " marcos libres.");
+    }
+
     /**
      * Busca un bloque continuo de celdas libres en la Memoria Principal (RAM) a partir de la
      * dirección reservada para programas de usuario.
@@ -388,6 +474,10 @@ public class Loader {
                 return getFreeSpaceInMemory_fixed_equal(size, memory);
             case "fixed_different":
                 return getFreeSpaceInMemory_fixed_different(size, memory);
+            case "paging":
+                ArrayList<Integer> framesIndexes = getFreeSpaceInMemory_paging(size, memory);
+                Loader.setTemporalFrames(framesIndexes);
+                return framesIndexes.get(0)*SystemConfig.getPagingSize()+SystemConfig.getUserMemoryStart();
             default: // dynamic
                 switch(SystemConfig.getMemoryFit()) {
                     case "next":

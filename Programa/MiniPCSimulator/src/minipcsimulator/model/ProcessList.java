@@ -61,7 +61,13 @@ public class ProcessList {
 
         // El nuevo BCP se inicializa apuntando a -1 (Fin de lista)
         memory.setPosition(memoryPosition + 13 + SystemConfig.STACK_SIZE, new MemoryRegister("bcp_next_bcp = -1", -1));
-        memory.setPosition(memoryPosition + 14 + SystemConfig.STACK_SIZE, new MemoryRegister("bcp_base_address = " + pcb.getStartPosition(), pcb.getStartPosition()));
+        
+        if (SystemConfig.getMemoryStrategyAssignment().equals("paging")) {
+            memory.setPosition(memoryPosition + 14 + SystemConfig.STACK_SIZE, new MemoryRegister("bcp_pages_table = " + pcb.getPagesTableString(), pcb.getPagesTableString()));
+        } else {
+            memory.setPosition(memoryPosition + 14 + SystemConfig.STACK_SIZE, new MemoryRegister("bcp_base_address = " + pcb.getStartPosition(), pcb.getStartPosition()));
+        }
+
         memory.setPosition(memoryPosition + 15 + SystemConfig.STACK_SIZE, new MemoryRegister("bcp_size_scope = " + pcb.getSizeProcessScope(), pcb.getSizeProcessScope()));
         memory.setPosition(memoryPosition + 16 + SystemConfig.STACK_SIZE, new MemoryRegister("bcp_priority = " + pcb.getPriority(), pcb.getPriority()));
     }
@@ -81,9 +87,20 @@ public class ProcessList {
 
         PCB pcb = process.getPCB();
         pcb.setTimeEnd(SystemClock.getInstance().getTicks());
-        int pos_end = pcb.getStartPosition() + pcb.getSizeProcessScope();
-        for (int i = pcb.getStartPosition(); i < pos_end; i++) {
-            memory.setPosition(i, null); // Limpia la memoria ocupada por el proceso
+        if (SystemConfig.getMemoryStrategyAssignment().equals("paging")) {
+            int userMemoryStart = SystemConfig.getUserMemoryStart();
+            int pageSize = SystemConfig.getPagingSize();
+            for (Integer page : pcb.getFramesTable()) {
+                int idx = userMemoryStart + page * pageSize;
+                for (int i = idx; i < idx + pageSize; i++) {
+                    memory.setPosition(i, null); // Limpia la memoria ocupada por el proceso
+                }
+            }
+        } else {
+            int pos_end = pcb.getStartPosition() + pcb.getSizeProcessScope();
+            for (int i = pcb.getStartPosition(); i < pos_end; i++) {
+                memory.setPosition(i, null); // Limpia la memoria ocupada por el proceso
+            }
         }
 
         int pcb_end = pcb.getMemoryPositionPCB() + SystemConfig.PCB_SIZE;

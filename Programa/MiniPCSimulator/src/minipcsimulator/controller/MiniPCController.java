@@ -871,6 +871,8 @@ public class MiniPCController {
         SystemConfig.setMemoryStrategyAssignment(vista.getEstrategiaMemoriaSeleccionada());
         SystemConfig.setMemoryFit(vista.getAjusteMemoriaSeleccionado());
         SystemConfig.setPartitionFixedEqualSize(vista.getTamanoParticionSeleccionado());
+        SystemConfig.setPagingSize(vista.getTamanoPaginaSeleccionado());
+
         if (estrategiaElegida.equals("Partición fija (diferentes)")) {
             SystemConfig.setPartitionFixedDifferentSize(vista.getParticionesSeleccionadas()); // solo si es válida
         }
@@ -878,6 +880,8 @@ public class MiniPCController {
         String estrategia = SystemConfig.getMemoryStrategyAssignment();
         if (estrategia.equals("fixed_equal")) {
             vista.actualizarColoresParticionIguales(vista.getTamanoParticionSeleccionado());
+        } else if (estrategia.equals("paging")) {
+            vista.actualizarColoresParticionIguales(vista.getTamanoPaginaSeleccionado());
         } else if (estrategia.equals("fixed_different")) {
             vista.actualizarColoresParticionDiferentes(vista.getParticionesSeleccionadas());
         } else {

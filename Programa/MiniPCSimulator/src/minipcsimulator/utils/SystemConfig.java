@@ -23,8 +23,9 @@ public class SystemConfig {
     //planif memoria
     private static String memoryStrategyAssignment = "dynamic"; // dynamic, paging, fixed_equal, fixed_different
     private static String memoryFit = "first";  // first, next, best
-    public static int partitionFixedEqualSize = 16;
-    public static int[] partitionFixedDifferentSizes = {16, 32, 64, 128};
+    private static int partitionFixedEqualSize = 16;
+    private static int[] partitionFixedDifferentSizes = {16, 32, 64, 128};
+    private static int pagingSize = 16; // para paginación
 
     private static int diskSize = 512;
     private static int diskMemoryVirtualSize;
@@ -497,5 +498,13 @@ public class SystemConfig {
 
     public static int[] getPartitionFixedDifferentSize() {
         return partitionFixedDifferentSizes;
+    }
+
+    public static void setPagingSize(int pagingSize) {
+        SystemConfig.pagingSize = pagingSize;
+    }
+
+    public static int getPagingSize() {
+        return pagingSize;
     }
 }
