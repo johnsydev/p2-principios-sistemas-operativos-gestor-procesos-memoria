@@ -45,7 +45,7 @@ public class PCB {
 
     private PCB nextPCB; // referencia al siguiente PCB en la lista enlazada de PCBs
 
-    private int priority = 1; // por defecto 1 para todos durante este proyecto
+    private int priority = 1; 
     
     // DISCO
 

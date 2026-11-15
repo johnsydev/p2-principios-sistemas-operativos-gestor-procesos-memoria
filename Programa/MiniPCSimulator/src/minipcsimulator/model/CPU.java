@@ -45,6 +45,7 @@ public class CPU {
         private final int id;
         private final String type;
         private final int weight;
+        
 
         // Constructor
         OpCode(int id, String type, int weight) {
@@ -103,6 +104,7 @@ public class CPU {
     private boolean hasPendingOutput = false;
     private int ticksRemaining = 0;
     private int currentInstructionAddress = 0;
+    private int quantumCounter = 0;
 
     /**
      * Constructor de la clase CPU.
@@ -965,5 +967,17 @@ public class CPU {
 
     public static void resetIDs() {
         cpu_count = 0;
+    }
+
+    public int getQuantumCounter() { 
+        return quantumCounter; 
+    }
+
+    public void resetQuantumCounter() { 
+        quantumCounter = 0; 
+    }
+    
+    public void incrementQuantumCounter() { 
+        quantumCounter++; 
     }
 }

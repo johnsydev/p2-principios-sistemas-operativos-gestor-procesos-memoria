@@ -38,6 +38,17 @@ public class Dispatcher {
         return readyList.remove(0);
     }
 
+    // elige el siguiente según el algoritmo y lo saca de la lista
+    public static Process selectNext(ArrayList<Process> readyList, SchedulingAlgorithm algorithm, int currentTime) {
+        if (readyList.isEmpty()) return null;
+
+        Process next = algorithm.selectNext(readyList, currentTime);
+        if (next != null) {
+            readyList.remove(next);
+        }
+        return next;
+    }
+
     /**
      * Esto guarda los registros del CPU en la memoria RAM y actualiza la vista de la memoria.
      * NOTA: Esto se hace para que se pueda visualizar el proceso en la GUI en la memoria principal tal como se solicitó, posteriormente se debe modificar.

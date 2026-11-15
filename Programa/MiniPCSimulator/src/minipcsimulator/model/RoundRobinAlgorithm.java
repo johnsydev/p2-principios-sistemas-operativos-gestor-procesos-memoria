@@ -17,10 +17,6 @@ public class RoundRobinAlgorithm implements SchedulingAlgorithm {
         return readyProcesses.get(0); // El que sigue en la cola de listos es el primer proceso de la lista
     }
 
-    @Override
-    public boolean isPreemptive() {
-        return true;
-    }
 
     @Override
     public int getQuantum() {

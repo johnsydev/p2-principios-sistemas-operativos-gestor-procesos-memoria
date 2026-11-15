@@ -17,6 +17,8 @@ public class Job {
     private boolean isLoadedInMemory = false;
     private int startAddressInRAM;
     private int assignedCpuId = 1;
+    private int arrivalTime;
+    private int priority;
 
     public Job(String pathFile, String nameFile, ArrayList<String> lines, ArrayList<ArrayList<String>> asmArray, int assignedCpuId) {
         this.pathFile = pathFile;
@@ -65,6 +67,22 @@ public class Job {
 
     public String getNameFile() {
         return nameFile;
+    }
+
+    public void setArrivalTime(int arrivalTime) {
+        this.arrivalTime = arrivalTime;
+    }
+
+    public int getArrivalTime() {
+        return arrivalTime;
+    }
+
+    public void setPriority(int priority) {
+        this.priority = priority;
+    }
+
+    public int getPriority() {
+        return priority;
     }
 
     public static void revertPID() {

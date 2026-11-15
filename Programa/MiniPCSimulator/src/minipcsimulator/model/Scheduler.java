@@ -1,8 +1,6 @@
 package minipcsimulator.model;
 
 import java.util.ArrayList;
-import java.util.LinkedList;
-
 import minipcsimulator.model.Process.ProcessState;
 import minipcsimulator.utils.SystemConfig;
 
@@ -78,11 +76,16 @@ public class Scheduler {
                     Process process = new Process(job.getAssignedPID(), memoryStartAddress, pcbStartAddress);
                     process.setAssignedCpuId(job.getAssignedCpuId());
                     process.setFilePathAndName(job.getPathFile(), job.getNameFile());
+                    process.getPCB().setPriority(job.getPriority());
+                    process.setArrivalTime(job.getArrivalTime());
+                    process.setBurstTime(job.getSize());
+
 
                     process.getPCB().setState(ProcessState.READY);
                     process.getPCB().setStartTime(systemClock.getTicks()); // tick de tiempo de inicio del proceso
                     process.getPCB().setDiskStartPosition(job.getDiskStartAddress());
                     process.getPCB().setDiskProgramSize(job.getSize());
+
 
                     Loader.loadToMemory(process, memory, disk);
 
@@ -103,7 +106,10 @@ public class Scheduler {
                     Process process = new Process(job.getAssignedPID(), virtualMemoryAddress, pcbStartAddress);
                     process.setAssignedCpuId(job.getAssignedCpuId());
                     process.setFilePathAndName(job.getPathFile(), job.getNameFile());
-
+                    process.getPCB().setPriority(job.getPriority());
+                    process.setArrivalTime(job.getArrivalTime());
+                    process.setBurstTime(job.getSize());
+                    
                     process.getPCB().setState(ProcessState.READY_SUSPENDED); 
                     process.getPCB().setStartTime(systemClock.getTicks());
                     process.getPCB().setDiskStartPosition(job.getDiskStartAddress());

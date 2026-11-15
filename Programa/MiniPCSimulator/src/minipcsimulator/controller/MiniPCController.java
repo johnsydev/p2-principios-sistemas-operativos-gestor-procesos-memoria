@@ -33,6 +33,9 @@ import minipcsimulator.model.SystemClock;
 import minipcsimulator.model.PCB;
 import minipcsimulator.model.ArrivalQueue;
 import minipcsimulator.model.ArrivalQueue.PendingProgram;
+import minipcsimulator.model.AlgorithmFactory;
+import minipcsimulator.model.FCFSAlgorithm;
+import minipcsimulator.model.SchedulingAlgorithm;
 import minipcsimulator.services.AsmParser;
 import minipcsimulator.services.FileManager;
 import minipcsimulator.utils.SystemConfig;
@@ -55,6 +58,7 @@ public class MiniPCController {
     private InterruptHandler interruptHandler;
     private FileSystem fileSystem;
     private ArrivalQueue arrivalQueue;
+    private SchedulingAlgorithm algorithm = new FCFSAlgorithm();
     
     //hora de inicio
     private LocalDateTime startTimeSimulation;
@@ -276,6 +280,8 @@ public class MiniPCController {
         }
 
         Job job = new Job(filePath, fileName, lines, asmArray, pendingProgram.getAssignedCpuId());
+        job.setArrivalTime(pendingProgram.getArrivalTime());
+        job.setPriority(pendingProgram.getPriority());
         job.setDiskStartAddress(startAddress);
         int jobAddressRAM = -1;
         try {
@@ -591,6 +597,14 @@ public class MiniPCController {
         }
     }
 
+    // Saca el proceso de la CPU y lo devuelve a la cola de listos
+    private void expulsarDeCPU(CPU aCpu, Process p) {
+        aCpu.getPCB().setState(ProcessState.READY); // antes del saveContext para que la RAM muestre READY
+        Dispatcher.saveContext(p, aCpu, memory);
+        aCpu.setPCB(null);
+        scheduler.addToReadyList(p);
+    }
+
     public void aceptarProgramasNuevos() {
         List<PendingProgram> arrivedPrograms = arrivalQueue.getArrivedPrograms(systemClock.getTicks());
         for (PendingProgram p : arrivedPrograms) {
@@ -636,10 +650,28 @@ public class MiniPCController {
         for (int i = 0; i < cpus.size(); i++) {
             CPU aCpu = cpus.get(i);
 
+            // Expulsión: solo si el algoritmo es expulsivo, hay un proceso corriendo y alguien espera
+            ArrayList<Process> ready = scheduler.getReadyList(i);
+            if (aCpu.getPCB() != null && algorithm.isPreemptive() && !ready.isEmpty()) {
+                Process running = processList.getProcessByPID(aCpu.getPCB().getPID());
+
+                if (running != null) {
+                    ArrayList<Process> pool = new ArrayList<>(ready);
+                    pool.add(0, running); // el que corre también compite
+
+                    Process best = algorithm.selectNext(pool, systemClock.getTicks());
+                    if (best != running) {
+                        expulsarDeCPU(aCpu, running); // la CPU queda libre
+                    }
+                }
+            }
+
             if (aCpu.getPCB() == null) {
-                Process nextProcess = Dispatcher.selectNext(scheduler.getReadyList(i));
+                Process nextProcess = Dispatcher.selectNext(
+                        scheduler.getReadyList(i), algorithm, systemClock.getTicks());
                 if (nextProcess == null) continue; // ocioso
                 Dispatcher.dispatch(nextProcess, aCpu);
+                aCpu.resetQuantumCounter(); // reinicia el contador de quantum al despachar un proceso
             }
 
             int pid = aCpu.getPCB().getPID();
@@ -654,6 +686,8 @@ public class MiniPCController {
                 continue;
             }
 
+            if (actual != null) actual.decrementBurstTime();
+
             if (aCpu.getPCB() == null) continue;
 
             ProcessState status = aCpu.getPCB().getState();
@@ -663,7 +697,17 @@ public class MiniPCController {
             } else if (status == ProcessState.BLOCKED) {
                 aCpu.setPCB(null);
             } else {
-                Dispatcher.saveContext(null, aCpu, memory);
+                // si el proceso sigue corriendo, se verifica el quantum
+                aCpu.incrementQuantumCounter();
+                int quantum = algorithm.getQuantum();
+                boolean quantumAgotado = quantum > 0 && aCpu.getQuantumCounter() >= quantum;
+
+                if (quantumAgotado && actual != null && !scheduler.getReadyList(i).isEmpty()) {
+                    expulsarDeCPU(aCpu, actual);
+                } else {
+                    if (quantumAgotado) aCpu.resetQuantumCounter();
+                    Dispatcher.saveContext(null, aCpu, memory);
+                }
             }
         }
 
@@ -862,6 +906,12 @@ public class MiniPCController {
          
         int cantidad = vista.getCantidadCPUSeleccionada();
         vista.configurarCantidadCPU(cantidad);
+
+        this.algorithm = AlgorithmFactory.create(
+            vista.getAlgoritmoCPUSeleccionado(), vista.getQuantumSeleccionado()
+        );
+        System.out.println("Algoritmo: " + vista.getAlgoritmoCPUSeleccionado()
+            + " | quantum: " + algorithm.getQuantum());
 
         this.cpu = this.cpus.get(0);
 

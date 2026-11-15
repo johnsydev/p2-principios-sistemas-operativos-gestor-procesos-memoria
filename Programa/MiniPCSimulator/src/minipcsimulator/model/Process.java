@@ -125,6 +125,14 @@ public class Process {
         this.burstTime = instructions.size();
     }
 
+    public void setBurstTime(int burstTime) {
+        this.burstTime = burstTime;
+    }
+
+    public void decrementBurstTime() { 
+        if (burstTime > 0) burstTime--; 
+    }
+
     public int getArrivalTime() {
         return arrivalTime;
     }

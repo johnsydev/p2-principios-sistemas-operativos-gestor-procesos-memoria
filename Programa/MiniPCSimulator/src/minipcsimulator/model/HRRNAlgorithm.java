@@ -25,7 +25,6 @@ public class HRRNAlgorithm implements SchedulingAlgorithm {
                 int waiting = currentTime - p.getArrivalTime();
                 double ratio = (double) (waiting + burst) / burst;
                 if (ratio > bestRatio || (ratio == bestRatio && p.getArrivalTime() < selected.getArrivalTime())) {
-                    // Desempate
                     bestRatio = ratio;
                     selected = p;
                 }
