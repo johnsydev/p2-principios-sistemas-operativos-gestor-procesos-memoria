@@ -240,6 +240,11 @@ public class MiniPCController {
             return null;
         }
 
+        if (!Loader.fitsInEmptyRAM(asmArray.size())) {
+            vista.mostrarError("El programa " + fileName + " (" + asmArray.size() + " instrucciones) no cabe en la memoria principal con la estrategia de asignación seleccionada.");
+            return null;
+        }
+
         return asmArray;
     }
 

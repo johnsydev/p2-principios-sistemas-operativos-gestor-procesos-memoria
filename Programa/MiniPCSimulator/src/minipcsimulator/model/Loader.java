@@ -10,13 +10,24 @@ import minipcsimulator.utils.SystemConfig;
 public class Loader {
 
     private static int nextFitIndex = SystemConfig.getUserMemoryStart();
+    private static int nextFitIndexVirtual = SystemConfig.getDiskMemoryVirtualStart();
     public static ArrayList<Integer> temporalFrames = new ArrayList<>();
+    public static ArrayList<Integer> temporalFramesVirtual = new ArrayList<>();
 
-    public static void setTemporalFrames(ArrayList<Integer> frames) {
-        temporalFrames = frames;
+    public static void setTemporalFrames(ArrayList<Integer> frames, boolean isVirtual) {
+        if (isVirtual) {
+            temporalFramesVirtual = frames;
+        } else  {
+            temporalFrames = frames;
+        }
     }
 
-    public static ArrayList<Integer> getTemporalFrames() {
+    public static ArrayList<Integer> getTemporalFrames(boolean isVirtual) {
+        if (isVirtual) {
+            ArrayList<Integer> tmp = new ArrayList<>(Loader.temporalFramesVirtual);
+            Loader.temporalFramesVirtual = new ArrayList<>();
+            return tmp;
+        }
         ArrayList<Integer> tmp = new ArrayList<>(Loader.temporalFrames);
         Loader.temporalFrames = new ArrayList<>();
         return tmp;
@@ -24,18 +35,30 @@ public class Loader {
 
     public static void resetNextFitIndex() {
         nextFitIndex = SystemConfig.getUserMemoryStart();
+        nextFitIndexVirtual = SystemConfig.getDiskMemoryVirtualStart();
     }
 
-    public static int getNextFitIndex() {
+    public static int getNextFitIndex(boolean isVirtual) {
+        if (isVirtual) {
+            return nextFitIndexVirtual;
+        }
         return nextFitIndex;
     }
 
-    private static void setNextFitIndex(int startProcess, int size) {
+    private static void setNextFitIndex(int startProcess, int size, boolean isVirtual) {
         int next = startProcess + size;
-        if (next >= SystemConfig.getMemorySize()) {
-            next = SystemConfig.getUserMemoryStart();
+
+        if (isVirtual) {
+            if (next >= SystemConfig.getDiskSize()) {
+                next = SystemConfig.getDiskMemoryVirtualStart();
+            }
+            nextFitIndexVirtual = next;
+        } else  {
+            if (next >= SystemConfig.getMemorySize()) {
+                next = SystemConfig.getUserMemoryStart();
+            }
+            nextFitIndex = next;
         }
-        nextFitIndex = next;
     }
 
     /**
@@ -100,11 +123,11 @@ public class Loader {
         ArrayList<Instruction> instructions = new ArrayList<>();
         try {
             int position = getFreeSpaceInMemory(size, memory); // posición inicio en RAM, i y position son RAM
-            Loader.setNextFitIndex(position, size);
+            Loader.setNextFitIndex(position, size, false);
             int userMemoryStart = SystemConfig.getUserMemoryStart();
 
             if (SystemConfig.getMemoryStrategyAssignment().equals("paging")) {
-                ArrayList<Integer> frames = Loader.getTemporalFrames();
+                ArrayList<Integer> frames = Loader.getTemporalFrames(false);
                 int pageSize = SystemConfig.getPagingSize();
                 int copied = 0;
                 for (Integer frame : frames) {
@@ -149,13 +172,36 @@ public class Loader {
         ArrayList<Instruction> instructions = new ArrayList<>();
         try {
             int positionVirtual = getFreeSpaceInVirtualMemory(size, disk);
+            Loader.setNextFitIndex(positionVirtual, size, true);
 
-            for (int i = positionVirtual; i < positionVirtual + size; i++) {
-                Instruction instruction = disk.getInstruction(startAddressDisk);
-                disk.setPositionInstruction(i, instruction);
+            int diskMemoryVirtualStart = SystemConfig.getDiskMemoryVirtualStart();
 
-                instructions.add(instruction);
-                startAddressDisk++;
+            if (SystemConfig.getMemoryStrategyAssignment().equals("paging")) {
+                ArrayList<Integer> frames = Loader.getTemporalFrames(true);
+                int pageSize = SystemConfig.getPagingSize();
+                int copied = 0;
+                for (Integer frame : frames) {
+                    int index = diskMemoryVirtualStart + pageSize * frame;
+                    for (int i = index; i < index + pageSize; i++) {
+                        if (copied >= size) break;
+                        Instruction instruction = disk.getInstruction(startAddressDisk);
+                        disk.setPositionInstruction(i, instruction);
+
+                        instructions.add(instruction);
+                        startAddressDisk++;
+                        copied++;
+                    }
+                }
+                process.getPCB().setFramesTable(frames);
+            } else {
+
+                for (int i = positionVirtual; i < positionVirtual + size; i++) {
+                    Instruction instruction = disk.getInstruction(startAddressDisk);
+                    disk.setPositionInstruction(i, instruction);
+
+                    instructions.add(instruction);
+                    startAddressDisk++;
+                }
             }
 
             // Guarda la posición de inicio de la Memoria Virtual en el PCB
@@ -176,26 +222,29 @@ public class Loader {
         try {
             // nueva dirección de inicio libre en la RAM de Usuario
             int newRamPosition = getFreeSpaceInMemory(size, memory);
-            Loader.setNextFitIndex(newRamPosition, size);
+            Loader.setNextFitIndex(newRamPosition, size, false);
 
             int userMemoryStart = SystemConfig.getUserMemoryStart();
 
             if (SystemConfig.getMemoryStrategyAssignment().equals("paging")) {
-                ArrayList<Integer> frames = Loader.getTemporalFrames();
+                ArrayList<Integer> frames = Loader.getTemporalFrames(false);
+                ArrayList<Integer> virtualFrames = process.getPCB().getFramesTable(); // marcos en memoria virtual
+                int diskMemoryVirtualStart = SystemConfig.getDiskMemoryVirtualStart();
                 int pageSize = SystemConfig.getPagingSize();
                 int copied = 0;
-                for (Integer frame : frames) {
-                    int index = userMemoryStart + pageSize * frame;
+                for (int p = 0; p < frames.size(); p++) {
+                    int index = userMemoryStart + pageSize * frames.get(p);
+                    int virtualIndex = diskMemoryVirtualStart + pageSize * virtualFrames.get(p);
                     for (int i = index; i < index + pageSize; i++) {
                         if (copied >= size) break;
-                        Instruction instruction = disk.getInstruction(startVirtualAddress);
+                        Instruction instruction = disk.getInstruction(virtualIndex);
 
                         memory.setPositionInstruction(i, instruction);
                         instructions.add(instruction);
 
-                        disk.setPosition(startVirtualAddress, null);
+                        disk.setPosition(virtualIndex, null);
 
-                        startVirtualAddress++;
+                        virtualIndex++;
                         copied++;
                     }
                 }
@@ -272,7 +321,7 @@ public class Loader {
         int userMemoryStart = SystemConfig.getUserMemoryStart();
         int startAddress = userMemoryStart;
         if (type.equals("next")) {
-            startAddress = Loader.getNextFitIndex();
+            startAddress = Loader.getNextFitIndex(false);
         }
         int totalMemorySize = SystemConfig.getMemorySize();
 
@@ -476,7 +525,7 @@ public class Loader {
                 return getFreeSpaceInMemory_fixed_different(size, memory);
             case "paging":
                 ArrayList<Integer> framesIndexes = getFreeSpaceInMemory_paging(size, memory);
-                Loader.setTemporalFrames(framesIndexes);
+                Loader.setTemporalFrames(framesIndexes, false);
                 return framesIndexes.get(0)*SystemConfig.getPagingSize()+SystemConfig.getUserMemoryStart();
             default: // dynamic
                 switch(SystemConfig.getMemoryFit()) {
@@ -576,9 +625,18 @@ public class Loader {
         throw new Exception("No hay espacio libre en el Disco para trabajos.");
     }
 
-    public static int getFreeSpaceInVirtualMemory(int size, Disk disk) throws Exception {
+    /* 
+        SECCIÓN DE MEMORIA VIRTUAL:
+    */
+
+    public static int getFreeSpaceInVirtualMemory_first_next_Fit(int size, Disk disk, String type) throws Exception {
         int startAddress = SystemConfig.getDiskMemoryVirtualStart();
+        int diskMemoryVirtualStart = startAddress;
         int totalVirtualMemorySize = SystemConfig.getDiskSize();
+
+        if (type.equals("next")) {
+            startAddress = Loader.getNextFitIndex(true);
+        }
 
         int consecutiveFree = 0;
         int startIndex = -1;
@@ -602,8 +660,217 @@ public class Loader {
             }
         }
 
+        // no se encontró desde el puntero, se reinicia el conteo para dar la vuelta hasta donde habíamos empezado
+        consecutiveFree = 0;
+        startIndex = -1;
+
+        if (type.equals("next")) {
+            for (int i = diskMemoryVirtualStart; i < totalVirtualMemorySize; i++) {
+                if (disk.getPosition(i) == null) {
+                    if (consecutiveFree == 0) {
+                        startIndex = i; // marca el inicio si no había uno
+                    }
+                    consecutiveFree++;
+
+                    // si se encuentra bloque continuo con la cantidad de celdas necesarias
+                    if (consecutiveFree == size) {
+                        return startIndex;
+                    }
+                } else {
+                    // si se rompe la continuidad, reiniciamos el conteo
+                    consecutiveFree = 0;
+                    startIndex = -1;
+
+                    // si ya dimos toda la vuelta, salir
+                    if (i >= startAddress) {
+                        break;
+                    }
+                }
+            }
+        }
+
         // Si después de recorrer toda la memoria virtual no se encontró un bloque contiguo suficiente
         throw new Exception("No hay espacio libre contiguo suficiente en la Memoria Virtual. " +
                             "Se requerían " + size + " celdas libres.");
+    }
+
+    private static int getFreeSpaceInVirtualMemory_bestFit(int size, Disk disk) throws Exception {
+        int startAddress = SystemConfig.getDiskMemoryVirtualStart();
+        int diskMemoryVirtualStart = startAddress;
+        int totalVirtualMemorySize = SystemConfig.getDiskSize();
+
+        int consecutiveFree = 0;
+        int startIndex = -1;
+
+        int bestFitIndex = -1;
+        int bestFitSize = -1;
+
+        for (int i = startAddress; i < totalVirtualMemorySize; i++) {
+            // Verificamos si la celda actual en la memoria está libre
+            if (disk.getPosition(i) == null) {
+                if (consecutiveFree == 0) {
+                    startIndex = i; // marca el inicio si no había uno
+                }
+                consecutiveFree++;
+            } else {
+                // si se rompe la continuidad, reiniciamos el conteo
+                if ((bestFitIndex == -1 || consecutiveFree < bestFitSize) && consecutiveFree >= size) {
+                    bestFitIndex = startIndex;
+                    bestFitSize = consecutiveFree;
+                }
+
+                consecutiveFree = 0;
+                startIndex = -1;
+            }
+        }
+
+        if ((bestFitIndex == -1 || consecutiveFree < bestFitSize) && consecutiveFree >= size) {
+            bestFitIndex = startIndex;
+            bestFitSize = consecutiveFree;
+        }
+
+        if (bestFitIndex != -1) {
+            return bestFitIndex;
+        }
+
+        // Si después de recorrer toda la memoria no se encontró un bloque contiguo suficiente
+        throw new Exception("No hay espacio libre contiguo suficiente en la Memoria Virtual. " +
+                            "Se requerían " + size + " celdas libres.");
+    }
+
+    private static int getFreeSpaceInVirtualMemory_fixed_equal(int size, Disk disk) throws Exception {
+        int diskMemoryVirtualStart = SystemConfig.getDiskMemoryVirtualStart();
+        int totalVirtualMemorySize = SystemConfig.getDiskSize();
+        int partitionSize = SystemConfig.getPartitionFixedEqualSize();
+
+        if (partitionSize < size) {
+            throw new Exception("El proceso es más grande que las particiones de la Memoria Virtual. " +
+                            "Se requerían " + size + " celdas libres y las particiones son de " + partitionSize + " celdas.");
+        }
+
+        for (int i = diskMemoryVirtualStart; (i+partitionSize) <= totalVirtualMemorySize; i+=partitionSize) {
+            // Verificamos si la celda actual en la memoria está libre
+            if (disk.getPosition(i) == null) {
+                return i;
+            }
+        }
+
+        throw new Exception("No hay espacio libre contiguo suficiente en las particiones de la Memoria Virtual. " +
+                            "Se requerían " + size + " celdas libres.");
+    }
+
+    private static int getFreeSpaceInVirtualMemory_fixed_different(int size, Disk disk) throws Exception {
+        int diskMemoryVirtualStart = SystemConfig.getDiskMemoryVirtualStart();
+        int totalVirtualMemorySize = SystemConfig.getDiskSize();
+        int[] partitionsSize = SystemConfig.getPartitionFixedDifferentSize();
+
+        int bestIndex = -1;
+        int bestDiffSize = -1;
+
+        int row = diskMemoryVirtualStart;
+
+        for (int i = 0; i < partitionsSize.length; i++) {
+            if (row + partitionsSize[i] > totalVirtualMemorySize) {
+                break;
+            }
+
+            // Verificamos si la celda actual en la memoria está libre
+            if (disk.getPosition(row) == null && partitionsSize[i] >= size) {
+                int diff = partitionsSize[i] - size;
+                if (bestIndex == -1 || diff < bestDiffSize) {
+                    bestIndex = row;
+                    bestDiffSize = diff;
+                }
+            }
+            row += partitionsSize[i];
+        }
+
+        if (bestIndex != -1) {
+            return bestIndex;
+        }
+
+        throw new Exception("No hay espacio libre contiguo suficiente en las particiones de la Memoria Virtual. " +
+                            "Se requerían " + size + " celdas libres.");
+    }
+
+    private static ArrayList<Integer> getFreeSpaceInVirtualMemory_paging(int size, Disk disk) throws Exception {
+        int diskMemoryVirtualStart = SystemConfig.getDiskMemoryVirtualStart();
+        int totalVirtualMemorySize = SystemConfig.getDiskSize();
+        int pagingSize = SystemConfig.getPagingSize();
+
+        int missingSpace = size;
+        ArrayList<Integer> framesIndexes = new ArrayList<>();
+
+        int idx = 0;
+        for (int i = diskMemoryVirtualStart; (i+pagingSize) <= totalVirtualMemorySize; i+=pagingSize) {
+            // Verificamos si la celda actual en la memoria está libre
+            if (disk.getPosition(i) == null) {
+                framesIndexes.add(idx);
+
+                missingSpace-=pagingSize;
+                if (missingSpace <= 0) {
+                    return framesIndexes;
+                }
+            }
+
+            idx++;
+        }
+
+        throw new Exception("No hay espacio libre suficiente en los marcos disponibles de la Memoria Virtual. " +
+                            "Se requerían " + size + " celdas libres, es decir, " + (int) Math.ceil((double) size/pagingSize) + " marcos libres.");
+    }
+
+    public static int getFreeSpaceInVirtualMemory(int size, Disk disk) throws Exception {
+        
+        switch(SystemConfig.getMemoryStrategyAssignment()) {
+            case "fixed_equal":
+                return getFreeSpaceInVirtualMemory_fixed_equal(size, disk);
+            case "fixed_different":
+                return getFreeSpaceInVirtualMemory_fixed_different(size, disk);
+            case "paging":
+                ArrayList<Integer> framesIndexes = getFreeSpaceInVirtualMemory_paging(size, disk);
+                Loader.setTemporalFrames(framesIndexes, true);
+                return framesIndexes.get(0)*SystemConfig.getPagingSize()+SystemConfig.getDiskMemoryVirtualStart();
+            default: // dynamic
+                switch(SystemConfig.getMemoryFit()) {
+                    case "next":
+                        return getFreeSpaceInVirtualMemory_first_next_Fit(size, disk, "next");
+                    case "best":
+                        return getFreeSpaceInVirtualMemory_bestFit(size, disk);
+                    default:
+                        return getFreeSpaceInVirtualMemory_first_next_Fit(size, disk, "first");
+                }
+        }
+    }
+
+    /**
+     * Verifica si un proceso cabe en la Memoria Principal (RAM), dependiendo de la estrategia de asignación.
+     * Sirve para descartar programas que nunca pueden ser cargados en la memoria principal por su tamaño.
+     * @param size Cantidad de instrucciones consecutivas que requiere el programa.
+     * @return Verdadero si cabe, falso si no.
+     */
+    public static boolean fitsInEmptyRAM(int size) {
+        int userMemoryStart = SystemConfig.getUserMemoryStart();
+        int totalMemorySize = SystemConfig.getMemorySize();
+        int userSize = totalMemorySize - userMemoryStart;
+
+        switch (SystemConfig.getMemoryStrategyAssignment()) {
+            case "fixed_equal":
+                return size <= SystemConfig.getPartitionFixedEqualSize() && SystemConfig.getPartitionFixedEqualSize() <= userSize;
+            case "fixed_different":
+                int row = userMemoryStart;
+                for (int partition : SystemConfig.getPartitionFixedDifferentSize()) {
+                    if (row + partition > totalMemorySize) break;
+                    if (partition >= size) return true;
+                    row += partition;
+                }
+                return false;
+            case "paging":
+                int pageSize = SystemConfig.getPagingSize();
+                int frames = userSize / pageSize;
+                return (int) Math.ceil((double) size / pageSize) <= frames;
+            default: // dynamic
+                return size <= userSize;
+        }
     }
 }

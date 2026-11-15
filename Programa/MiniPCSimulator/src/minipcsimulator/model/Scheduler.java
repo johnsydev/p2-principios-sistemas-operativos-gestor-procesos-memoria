@@ -50,7 +50,7 @@ public class Scheduler {
     }
 
     public void checkAdmitJob() {
-        boolean onlyMemVirtual = false;
+        boolean onlyMemVirtual = hayProcesosSuspendidos(); // antes: false
         while (jobList.hasPendingJobs()) {
             if (processList.getProcessCount() >= SystemConfig.MAX_PROCESSES_IN_MEMORY) {
                 System.out.println("No se pueden admitir más procesos en memoria. Se alcanzó el límite máximo de procesos.");
@@ -81,7 +81,7 @@ public class Scheduler {
 
                 if (haveSpaceInRAM) {
                     if (onlyMemVirtual) {
-                        return; // Si ya se admitió un proceso en memoria virtual, no admitir más en RAM, FCFS
+                        return; // Si ya hay un proceso esperando en memoria virtual, no admitir otros en RAM antes que él (admisión en orden de llegada), FCFS
                     }
                     Process process = new Process(job.getAssignedPID(), memoryStartAddress, pcbStartAddress);
                     process.setAssignedCpuId(job.getAssignedCpuId());
@@ -128,7 +128,7 @@ public class Scheduler {
                     Loader.loadToVirtualMemory(process, disk);
 
                     processList.addProcess(process);
-                    admit(process);
+                    //admit(process);
                     System.out.println("Proceso PID " + process.getPCB().getPID() + " admitido en estado READY/SUSPEND (Cargado en Memoria Virtual).");
                 }
 
@@ -141,6 +141,16 @@ public class Scheduler {
                 
             }
         }
+    }
+
+    // revisa si hay algún proceso esperando en memoria virtual
+    private boolean hayProcesosSuspendidos() {
+        for (Process p : processList.getProcesses()) {
+            if (p.getState() == ProcessState.READY_SUSPENDED) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public void setSelfish(boolean selfish, double a, double b) {
@@ -216,6 +226,7 @@ public class Scheduler {
                     // Si se ejecutó con éxito, cambiamos el estado a READY
                     process.getPCB().setState(ProcessState.READY);
                     updateStateAndInfo(process); // Actualiza el estado en la RAM
+                    admit(process);
                     System.out.println("Proceso PID " + process.getPCB().getPID() + " activado con éxito: READY_SUSPENDED -> READY.");
 
                 } catch (Exception e) {
@@ -260,10 +271,17 @@ public class Scheduler {
 
             // base address
             int posBaseAddr = baseRAM + 14 + SystemConfig.STACK_SIZE;
-            memory.setPosition(
-                posBaseAddr, 
-                new MemoryRegister("bcp_base_address = " + process.getPCB().getStartPosition(), process.getPCB().getStartPosition())
-            );
+            if (SystemConfig.getMemoryStrategyAssignment().equals("paging")) {
+                memory.setPosition(
+                    posBaseAddr, 
+                    new MemoryRegister("bcp_pages_table = " + process.getPCB().getPagesTableString(), process.getPCB().getPagesTableString())
+                );
+            } else {
+                memory.setPosition(
+                    posBaseAddr, 
+                    new MemoryRegister("bcp_base_address = " + process.getPCB().getStartPosition(), process.getPCB().getStartPosition())
+                );
+            }
 
             // size
             int posSizeScope = baseRAM + 15 + SystemConfig.STACK_SIZE;
