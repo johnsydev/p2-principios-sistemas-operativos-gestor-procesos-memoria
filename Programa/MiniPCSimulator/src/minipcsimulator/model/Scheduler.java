@@ -1,9 +1,9 @@
 package minipcsimulator.model;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import minipcsimulator.model.Process.ProcessState;
 import minipcsimulator.utils.SystemConfig;
-import java.util.Iterator;
 
 public class Scheduler {
     private JobList jobList;

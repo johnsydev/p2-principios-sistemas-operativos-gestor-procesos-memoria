@@ -715,6 +715,7 @@ public class MiniPCController {
                 aCpu.executeInstruction();
             } catch (RuntimeException e) {
                 terminarProcesoDeCPU(aCpu, e.getMessage());
+                scheduler.updateSelfish(i, null);
                 continue;
             }
 
@@ -723,11 +724,12 @@ public class MiniPCController {
                 actual.addCpuTime(1);
             }
 
+            boolean sigueCorriendo = (aCpu.getPCB() != null && aCpu.getPCB().getState() != ProcessState.EXIT && aCpu.getPCB().getState() != ProcessState.BLOCKED);
+            scheduler.updateSelfish(i, sigueCorriendo ? actual : null);
+
             if (aCpu.getPCB() == null) continue;
 
             ProcessState status = aCpu.getPCB().getState();
-            Process corriendo = (status == ProcessState.EXIT || status == ProcessState.BLOCKED) ? null : actual;
-            scheduler.updateSelfish(i, corriendo);
             if (status == ProcessState.EXIT) {
                 processList.removeProcess(aCpu.getPCB().getPID());
                 aCpu.setPCB(null);
