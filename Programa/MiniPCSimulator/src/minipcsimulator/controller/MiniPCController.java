@@ -80,6 +80,8 @@ public class MiniPCController {
     private ArrayList<Stat> historialEstadisticas = new ArrayList<>();
     private boolean estadisticaGuardada = false;
 
+    private Thread hiloEjecucion; // hilo del modo automático
+
     /**
      * Constructor de la clase MiniPCController.
      * Inicializa la vista, la memoria principal y el CPU.
@@ -734,6 +736,7 @@ public class MiniPCController {
                 processList.removeProcess(aCpu.getPCB().getPID());
                 aCpu.setPCB(null);
             } else if (status == ProcessState.BLOCKED) {
+                Dispatcher.saveContext(null, aCpu, memory);
                 aCpu.setPCB(null);
             } else {
                 aCpu.incrementQuantumCounter();
@@ -766,8 +769,12 @@ public class MiniPCController {
 
         this.autoExecute = true;
         vista.setModoAutomatico(true);
+
+        if (hiloEjecucion != null && hiloEjecucion.isAlive()) {
+            return;
+        }
         
-        new Thread(() -> {
+        hiloEjecucion = new Thread(() -> {
             while (autoExecute) {
 
                 javax.swing.SwingUtilities.invokeLater(() -> {
@@ -783,7 +790,8 @@ public class MiniPCController {
                     break;
                 }
             }
-        }).start(); 
+        }); 
+        hiloEjecucion.start();
     }
 
     /**
@@ -1042,6 +1050,7 @@ public class MiniPCController {
      */
     private void finalizarSimulacion() {
         this.autoExecute = false;
+        vista.setModoAutomatico(false);
         List<Object[]> datosEstadisticas = new ArrayList<>();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm:ss");
 

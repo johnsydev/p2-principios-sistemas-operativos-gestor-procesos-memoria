@@ -49,7 +49,7 @@ public class InterruptHandler {
     public void handleInterruptIO(CPU cpu, String ioType) {
         if (ioType.equals("OUTPUT")) {
 
-            this.bufferOutput = cpu.getPCB().getDX() + "\n";
+            this.bufferOutput += cpu.getPCB().getDX() + "\n";
             this.hasPendingOutput = true;
             
         } else {
@@ -121,7 +121,7 @@ public class InterruptHandler {
     }
 
     public void sendToIInternalConsole(String output) {
-        this.bufferOutput = output + "\n";
+        this.bufferOutput += output + "\n";
         this.hasPendingOutput = true;
     }
 }
