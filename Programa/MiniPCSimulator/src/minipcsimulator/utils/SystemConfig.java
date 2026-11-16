@@ -19,6 +19,7 @@ public class SystemConfig {
     private static int numCPUs = 1;
     private static String algorithm = "FCFS";
     private static int quantum = 1;
+    private static int mlfqLevels = 3; // cantidad de colas de MLFQ
 
     //planif memoria
     private static String memoryStrategyAssignment = "dynamic"; // dynamic, paging, fixed_equal, fixed_different
@@ -506,5 +507,31 @@ public class SystemConfig {
 
     public static int getPagingSize() {
         return pagingSize;
+    }
+
+    // Para planificación de CPU
+    
+    public static String getAlgorithm() {
+        return algorithm;
+    }
+
+    public static void setAlgorithm(String algorithm) {
+        SystemConfig.algorithm = algorithm;
+    }
+
+    public static int getQuantum() {
+        return quantum;
+    }
+
+    public static void setQuantum(int quantum) {
+        SystemConfig.quantum = quantum;
+    }
+
+    public static int getMlfqLevels() {
+        return mlfqLevels;
+    }
+
+    public static void setMlfqLevels(int mlfqLevels) {
+        SystemConfig.mlfqLevels = mlfqLevels;
     }
 }

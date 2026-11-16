@@ -13,10 +13,13 @@ import javax.swing.text.BadLocationException;
 import javax.swing.text.DefaultFormatter;
 import javax.swing.text.DocumentFilter;
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
+import minipcsimulator.model.Stat;
 import minipcsimulator.utils.SystemConfig;
 
 public class VentanaPrincipal extends JFrame {
@@ -633,13 +636,22 @@ public class VentanaPrincipal extends JFrame {
      * @param datosEstadisticas Lista de filas [Proceso, Tiempo Inicio, Tiempo Final, Duración, Tick inicio, Tick final, Tiempo Ocioso, Turnaround, Tr/Ts]
      */
     public void mostrarVentanaEstadisticas(List<Object[]> datosEstadisticas) {
+        mostrarVentanaEstadisticas(datosEstadisticas, null);
+    }
+
+    /**
+     * Igual que la anterior, pero debajo de la tabla actual muestra el historial de ejecuciones,
+     * cada una como una sección desplegable (cerrada por defecto).
+     * @param historial ejecuciones terminadas (puede ser null o vacío)
+     */
+    public void mostrarVentanaEstadisticas(List<Object[]> datosEstadisticas, List<Stat> historial) {
         hayEstadisticas = true;
         if (btnEstadisticas != null) {
             btnEstadisticas.setEnabled(true);
         }
 
         dialogEstadisticas = new JDialog(this, "Estadísticas de Ejecución de Procesos", true);
-        dialogEstadisticas.setSize(900, 440);
+        dialogEstadisticas.setSize(900, 620);
         dialogEstadisticas.setResizable(false);
         dialogEstadisticas.setLocationRelativeTo(this);
 
@@ -659,22 +671,39 @@ public class VentanaPrincipal extends JFrame {
         panelEncabezado.add(lblTituloModal, BorderLayout.NORTH);
         panelEncabezado.add(crearPanelConfiguracionUsada(), BorderLayout.CENTER);
 
-        // Tabla de Estadísticas
-        String[] columnasEst = {"Proceso", "Tiempo Inicio", "Tiempo Final", "Duración", "Tick inicio", "Tick final", "Tiempo Ocioso", "Turnaround", "Tr / Ts"};
-        DefaultTableModel modeloEstadisticas = new DefaultTableModel(columnasEst, 0) {
-            @Override
-            public boolean isCellEditable(int r, int c) { return false; }
-        };
+        // Contenido con scroll: tabla de la ejecución actual y debajo el historial
+        PanelScroll contenido = new PanelScroll();
+        contenido.setLayout(new BoxLayout(contenido, BoxLayout.Y_AXIS));
+        contenido.setBackground(BG_PANEL);
 
-        if (datosEstadisticas != null) {
-            for (Object[] fila : datosEstadisticas) {
-                modeloEstadisticas.addRow(fila);
+        contenido.add(crearTablaEstadisticas(datosEstadisticas));
+        contenido.add(Box.createVerticalStrut(25));
+
+        JLabel lblHistorial = new JLabel("HISTORIAL DE ESTADÍSTICAS");
+        lblHistorial.setForeground(TEXT);
+        lblHistorial.setFont(new Font("SansSerif", Font.BOLD, 13));
+        lblHistorial.setAlignmentX(Component.LEFT_ALIGNMENT);
+        contenido.add(lblHistorial);
+        contenido.add(Box.createVerticalStrut(8));
+
+        if (historial == null || historial.isEmpty()) {
+            JLabel lblVacio = new JLabel("Todavía no hay ejecuciones terminadas.");
+            lblVacio.setForeground(TEXT_SECONDARY);
+            lblVacio.setFont(new Font("SansSerif", Font.PLAIN, 11));
+            lblVacio.setAlignmentX(Component.LEFT_ALIGNMENT);
+            contenido.add(lblVacio);
+        } else {
+            for (Stat stat : historial) {
+                contenido.add(crearSeccionHistorial(stat));
+                contenido.add(Box.createVerticalStrut(14));
             }
         }
 
-        JTable tablaEstadisticas = crearTabla(modeloEstadisticas);
-        JScrollPane scrollEstadisticas = new JScrollPane(tablaEstadisticas);
-        scrollEstadisticas.setBorder(BorderFactory.createLineBorder(BORDER, 1));
+        JScrollPane scrollEstadisticas = new JScrollPane(contenido);
+        scrollEstadisticas.setBorder(BorderFactory.createEmptyBorder());
+        scrollEstadisticas.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scrollEstadisticas.getVerticalScrollBar().setUnitIncrement(16);
+        scrollEstadisticas.getViewport().setBackground(BG_PANEL);
 
         // Botón Cerrar
         JPanel panelInferior = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
@@ -691,6 +720,122 @@ public class VentanaPrincipal extends JFrame {
 
         dialogEstadisticas.setContentPane(panelModal);
         dialogEstadisticas.setVisible(true);
+    }
+
+    // tabla de estadísticas de una ejecución, con alto según la cantidad de procesos (máximo 8 filas visibles)
+    private JScrollPane crearTablaEstadisticas(List<Object[]> filas) {
+        String[] columnasEst = {"Proceso", "Tiempo Inicio", "Tiempo Final", "Duración", "Tick inicio", "Tick final", "Tiempo Ocioso", "Turnaround", "Tr / Ts"};
+        DefaultTableModel modeloEstadisticas = new DefaultTableModel(columnasEst, 0) {
+            @Override
+            public boolean isCellEditable(int r, int c) { return false; }
+        };
+
+        if (filas != null) {
+            for (Object[] fila : filas) {
+                modeloEstadisticas.addRow(fila);
+            }
+        }
+
+        JTable tablaEstadisticas = crearTabla(modeloEstadisticas);
+        JScrollPane scroll = new JScrollPane(tablaEstadisticas);
+        scroll.setBorder(BorderFactory.createLineBorder(BORDER, 1));
+
+        int filasVisibles = Math.max(1, Math.min(modeloEstadisticas.getRowCount(), 8));
+        int alto = filasVisibles * tablaEstadisticas.getRowHeight() + 32; // + encabezado
+        scroll.setPreferredSize(new Dimension(0, alto));
+        scroll.setMaximumSize(new Dimension(Integer.MAX_VALUE, alto));
+        scroll.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return scroll;
+    }
+
+    // sección desplegable de una ejecución del historial: cerrada muestra un resumen, abierta muestra todo
+    private JPanel crearSeccionHistorial(Stat stat) {
+        // el alto máximo es el preferido para que el BoxLayout no la estire
+        JPanel seccion = new JPanel(new BorderLayout()) {
+            @Override
+            public Dimension getMaximumSize() {
+                return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
+            }
+        };
+        seccion.setBackground(BG_CARD);
+        seccion.setAlignmentX(Component.LEFT_ALIGNMENT);
+        seccion.setBorder(BorderFactory.createLineBorder(BORDER, 1));
+
+        String fecha = stat.getFecha().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss"));
+        String resumen = "Ejecución #" + stat.getNumEjecucion()
+                + "   ·   " + fecha
+                + "   ·   " + stat.getAlgoritmo()
+                + "   ·   " + stat.getCantidadCPU() + " CPU"
+                + "   ·   " + stat.getEstrategiaMemoria()
+                + "   ·   " + stat.getFilas().size() + " procesos";
+
+        // cabecera que se toca para abrir o cerrar
+        JLabel lblCabecera = new JLabel("▸   " + resumen);
+        lblCabecera.setForeground(TEXT);
+        lblCabecera.setFont(new Font("SansSerif", Font.BOLD, 12));
+        lblCabecera.setBorder(new EmptyBorder(9, 12, 9, 12));
+        lblCabecera.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+
+        // detalle: configuración usada y tabla, igual que la ejecución actual
+        JPanel detalle = new JPanel(new BorderLayout(0, 10));
+        detalle.setOpaque(false);
+        detalle.setBorder(new EmptyBorder(2, 12, 12, 12));
+        detalle.add(crearPanelConfiguracionStat(stat), BorderLayout.NORTH);
+        detalle.add(crearTablaEstadisticas(stat.getFilas()), BorderLayout.CENTER);
+        detalle.setVisible(false); // empieza cerrada
+
+        lblCabecera.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                boolean abrir = !detalle.isVisible();
+                detalle.setVisible(abrir);
+                lblCabecera.setText((abrir ? "▾   " : "▸   ") + resumen);
+                seccion.revalidate();
+                if (seccion.getParent() != null) {
+                    seccion.getParent().revalidate();
+                    seccion.getParent().repaint();
+                }
+            }
+        });
+
+        seccion.add(lblCabecera, BorderLayout.NORTH);
+        seccion.add(detalle, BorderLayout.CENTER);
+        return seccion;
+    }
+
+    // tarjetas con la configuración guardada de una ejecución del historial
+    private JPanel crearPanelConfiguracionStat(Stat stat) {
+        JPanel fila = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        fila.setOpaque(false);
+
+        fila.add(crearChipInfo("ALGORITMO CPU", stat.getAlgoritmo(), BLUE));
+        fila.add(crearChipInfo("CPUS", String.valueOf(stat.getCantidadCPU()), null));
+        if (!"-".equals(stat.getParametrosAlgoritmo())) {
+            fila.add(crearChipInfo("PARÁMETROS CPU", stat.getParametrosAlgoritmo(), null));
+        }
+
+        fila.add(crearChipInfo("MEMORIA", stat.getEstrategiaMemoria(), GREEN));
+        fila.add(crearChipInfo("PARÁMETROS MEMORIA", stat.getParametrosMemoria(), null));
+
+        return fila;
+    }
+
+    // panel que se ajusta al ancho del scroll (así no aparece scroll horizontal)
+    private static class PanelScroll extends JPanel implements Scrollable {
+        @Override
+        public Dimension getPreferredScrollableViewportSize() { return getPreferredSize(); }
+
+        @Override
+        public int getScrollableUnitIncrement(Rectangle r, int orientacion, int direccion) { return 16; }
+
+        @Override
+        public int getScrollableBlockIncrement(Rectangle r, int orientacion, int direccion) { return 64; }
+
+        @Override
+        public boolean getScrollableTracksViewportWidth() { return true; }
+
+        @Override
+        public boolean getScrollableTracksViewportHeight() { return false; }
     }
 
     // Fila de tarjetas con la configuración usada en la simulación

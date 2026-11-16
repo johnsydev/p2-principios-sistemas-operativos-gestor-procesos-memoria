@@ -36,6 +36,7 @@ import minipcsimulator.model.ArrivalQueue.PendingProgram;
 import minipcsimulator.model.AlgorithmFactory;
 import minipcsimulator.model.FCFSAlgorithm;
 import minipcsimulator.model.SchedulingAlgorithm;
+import minipcsimulator.model.Stat;
 import minipcsimulator.services.AsmParser;
 import minipcsimulator.services.FileManager;
 import minipcsimulator.utils.SystemConfig;
@@ -72,8 +73,12 @@ public class MiniPCController {
     private boolean autoExecute = false;
 
     private boolean simulationStarted = false;
-
+    
     private int cpuIdTab = 1;
+
+    // historial acumulado de ejecuciones
+    private ArrayList<Stat> historialEstadisticas = new ArrayList<>();
+    private boolean estadisticaGuardada = false;
 
     /**
      * Constructor de la clase MiniPCController.
@@ -321,7 +326,7 @@ public class MiniPCController {
      * Genera la tabla de instrucciones en la GUI
      */
     private void seleccionarArchivos() {
-        if (this.processList.hasProcesses()) {
+        if (this.processList.hasProcesses() || this.simulationStarted) {
             vista.mostrarError("Ya hay un programa cargado. Debe finalizarlo y limpiar el sistema antes de cargar otro.");
             return;
         }
@@ -905,6 +910,10 @@ public class MiniPCController {
         SystemConfig.setPartitionFixedEqualSize(vista.getTamanoParticionSeleccionado());
         SystemConfig.setPagingSize(vista.getTamanoPaginaSeleccionado());
 
+        SystemConfig.setAlgorithm(vista.getAlgoritmoCPUSeleccionado());
+        SystemConfig.setQuantum(vista.getQuantumSeleccionado());
+        SystemConfig.setMlfqLevels(vista.getColasMLFQSeleccionadas());
+
         if (estrategiaElegida.equals("Partición fija (diferentes)")) {
             SystemConfig.setPartitionFixedDifferentSize(vista.getParticionesSeleccionadas()); // solo si es válida
         }
@@ -958,6 +967,7 @@ public class MiniPCController {
 
         this.arrivalQueue = new ArrivalQueue();
         this.simulationStarted = false;
+        this.estadisticaGuardada = false;
 
         Loader.resetNextFitIndex();
 
@@ -973,6 +983,7 @@ public class MiniPCController {
         systemClock.reset();
         this.autoExecute = false;
         this.simulationStarted = false;
+        this.estadisticaGuardada = false;
         this.memory = null; //sacamos memoria vieja
         this.disk = null; //sacamos disco viejo
         this.cpu = null; //sacamos cpu vieja
@@ -1059,6 +1070,70 @@ public class MiniPCController {
 
             datosEstadisticas.add(new Object[]{pid, horaInicio, horaFin, String.format("%.2f s", duracionSegundos), tickInicio, tickFin, tiempoOcioso, turnaround, String.format("%.2f", trTs)});
         }
-        vista.mostrarVentanaEstadisticas(datosEstadisticas);
+
+        // guardar en el historial
+        if (simulacionTerminada() && !estadisticaGuardada && !datosEstadisticas.isEmpty()) {
+            Stat stat = new Stat(
+                historialEstadisticas.size() + 1,
+                SystemConfig.getAlgorithm(),
+                SystemConfig.getNumCPUs(),
+                getParametrosAlgoritmo(),
+                getNombreEstrategiaMemoria(),
+                getParametrosMemoria(),
+                datosEstadisticas
+            );
+            historialEstadisticas.add(stat);
+            estadisticaGuardada = true;
+            System.out.println("Estadística guardada: " + stat);
+        }
+
+        vista.mostrarVentanaEstadisticas(datosEstadisticas, historialEstadisticas);
+    }
+
+    // parámetros que usa el algoritmo actual (esto es para estadísticas)
+    private String getParametrosAlgoritmo() {
+        switch (SystemConfig.getAlgorithm()) {
+            case "Round Robin":
+            case "Lottery":
+                return "Quantum: " + SystemConfig.getQuantum();
+            case "Selfish Round Robin":
+                return "Quantum: " + SystemConfig.getQuantum() + ", a: " + selfishA + ", b: " + selfishB;
+            case "Multilevel Feedback Queue":
+                return "Quantum: " + SystemConfig.getQuantum() + ", Colas: " + SystemConfig.getMlfqLevels();
+            default:
+                return "-"; // para los algoritmos que no usan parámetros
+        }
+    }
+
+    // nombre de la estrategia de memoria para mostrar (esto es para estadísticas)
+    private String getNombreEstrategiaMemoria() {
+        switch (SystemConfig.getMemoryStrategyAssignment()) {
+            case "paging":
+                return "Paginación";
+            case "fixed_equal":
+                return "Partición fija (iguales)";
+            case "fixed_different":
+                return "Partición fija (diferentes)";
+            default:
+                return "Dinámica";
+        }
+    }
+
+    // parámetros que usa la estrategia de memoria actual (esto es para estadísticas)
+    private String getParametrosMemoria() {
+        switch (SystemConfig.getMemoryStrategyAssignment()) {
+            case "paging":
+                return "Página: " + SystemConfig.getPagingSize() + " celdas";
+            case "fixed_equal":
+                return "Partición: " + SystemConfig.getPartitionFixedEqualSize() + " celdas";
+            case "fixed_different":
+                return "Particiones: " + java.util.Arrays.toString(SystemConfig.getPartitionFixedDifferentSize());
+            default:
+                switch (SystemConfig.getMemoryFit()) {
+                    case "next": return "Ajuste: Next Fit";
+                    case "best": return "Ajuste: Best Fit";
+                    default:     return "Ajuste: First Fit";
+                }
+        }
     }
 }
