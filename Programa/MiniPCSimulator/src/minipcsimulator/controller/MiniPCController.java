@@ -416,6 +416,7 @@ public class MiniPCController {
 
             if (opcion == VentanaPrincipal.PREVIA_INICIAR) {
                 simulationStarted = true;
+                this.startTimeSimulation = LocalDateTime.now();
                 accionDespues.run();
                 return;
             }
@@ -441,7 +442,7 @@ public class MiniPCController {
             return;
         }
         */
-        this.startTimeSimulation = LocalDateTime.now();
+        //this.startTimeSimulation = LocalDateTime.now();
         
         /*
         if (this.process.getPCB().getState() != Process.ProcessState.NEW) {
@@ -1037,18 +1038,16 @@ public class MiniPCController {
             PCB pcb = p.getPCB();
             String pid = "PID " + pcb.getPID();
 
-            LocalDateTime horaInicioDateT = this.startTimeSimulation.plusSeconds(ticksAcumulados);
-            
-            int tickInicio = pcb.getStartTime();
-            int tickFin = pcb.getTimeEnd()+1;
+            int tickInicio = p.getArrivalTime();
+            int tickFin = pcb.getTimeEnd() + 1;
             int ticksProceso = pcb.getTimeSpent();
-            ticksAcumulados += ticksProceso;
 
-            LocalDateTime horaFinDateT = this.startTimeSimulation.plusSeconds(ticksAcumulados);
+            // cada tick es 1 segundo desde el inicio de la simulación
+            LocalDateTime horaInicioDateT = this.startTimeSimulation.plusSeconds(tickInicio);
+            LocalDateTime horaFinDateT = this.startTimeSimulation.plusSeconds(tickFin);
 
             String horaInicio = horaInicioDateT.format(formatter);
             String horaFin = horaFinDateT.format(formatter);
-            
 
             int turnaround = tickFin - tickInicio;
 
@@ -1060,7 +1059,6 @@ public class MiniPCController {
 
             datosEstadisticas.add(new Object[]{pid, horaInicio, horaFin, String.format("%.2f s", duracionSegundos), tickInicio, tickFin, tiempoOcioso, turnaround, String.format("%.2f", trTs)});
         }
-
         vista.mostrarVentanaEstadisticas(datosEstadisticas);
     }
 }
