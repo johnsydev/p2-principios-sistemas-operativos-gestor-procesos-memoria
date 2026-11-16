@@ -51,6 +51,9 @@ public class VentanaPrincipal extends JFrame {
     private int[] inicioParticiones = null;
     private int[] tamanoParticiones = null;
 
+    // color de cada dirección de la memoria virtual según su partición o marco (vacío si no hay)
+    private HashMap<Integer, Color> coloresParticionVirtual = new HashMap<>();
+
     // gris para las celdas sobrantes que no completan una partición
     private static final Color GRIS_DESPERDICIO = new Color(105, 110, 120);
     private static final float TRANSPARENCIA_PARTICION = 0.25f;
@@ -533,7 +536,7 @@ public class VentanaPrincipal extends JFrame {
                 if (sobrante > 0) {
                     mostrarNota(lblNotaParticionIguales, "Nota: Sobrarán " + sobrante + " celdas con ese tamaño de partición", ORANGE);
                 } else {
-                    mostrarNota(lblNotaParticionIguales, "Nota: Todas las celdas se paginarán sin que sobre alguna", NOTA_VERDE);
+                    mostrarNota(lblNotaParticionIguales, "Nota: Todas las celdas quedan dentro de una partición sin que sobre alguna", NOTA_VERDE);
                 }
             }
         } else {
@@ -1036,6 +1039,7 @@ public class VentanaPrincipal extends JFrame {
             public boolean isCellEditable(int r, int c) { return false; }
         };
         tablaVirtual = crearTabla(modeloTablaVirtual);
+        configurarRendererVirtual();
         JScrollPane scrollVirtual = new JScrollPane(tablaVirtual);
         scrollVirtual.setBorder(BorderFactory.createEmptyBorder());
         cardVirtual.add(scrollVirtual, BorderLayout.CENTER);
@@ -1168,6 +1172,44 @@ public class VentanaPrincipal extends JFrame {
 
         for (int i = 0; i < tablaMemoria.getColumnCount(); i++) {
             tablaMemoria.getColumnModel().getColumn(i).setCellRenderer(renderer);
+        }
+    }
+
+    // Pinta la memoria virtual con el color de su partición o marco (igual que la RAM, pero sin CPUs)
+    private void configurarRendererVirtual() {
+        DefaultTableCellRenderer renderer = new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(
+                    JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+                Component c = super.getTableCellRendererComponent(table, value, false, false, row, column);
+
+                Color fondo;
+                if (row % 2 == 0) {
+                    fondo = BG_CARD;
+                } else {
+                    fondo = new Color(28, 32, 38);
+                }
+
+                // si la dirección pertenece a una partición o marco, se pinta encima del fondo
+                Object posicion = table.getValueAt(row, 0);
+                if (posicion instanceof Integer) {
+                    Color colorParticion = coloresParticionVirtual.get((Integer) posicion);
+                    if (colorParticion == GRIS_DESPERDICIO) {
+                        fondo = mezclarColor(GRIS_DESPERDICIO, fondo, TRANSPARENCIA_DESPERDICIO);
+                    } else if (colorParticion != null) {
+                        fondo = mezclarColor(colorParticion, fondo, TRANSPARENCIA_PARTICION);
+                    }
+                }
+
+                c.setBackground(fondo);
+                c.setForeground(TEXT);
+                setBorder(new EmptyBorder(0, 8, 0, 8));
+                return c;
+            }
+        };
+
+        for (int i = 0; i < tablaVirtual.getColumnCount(); i++) {
+            tablaVirtual.getColumnModel().getColumn(i).setCellRenderer(renderer);
         }
     }
 
@@ -1659,7 +1701,7 @@ public class VentanaPrincipal extends JFrame {
      * Define las particiones fijas de la RAM y las pinta en la tabla de memoria.
      * Cada partición lleva un color pastel distinto, y las celdas sobrantes
      * que no completan una partición se pintan de gris.
-     * Para estrategias sin particiones (dinámica, paginación) se llama con null, null.
+     * Para estrategias sin particiones (dinámica) se llama con null, null, y también limpia la memoria virtual.
      * @param inicios dirección de inicio de cada partición
      * @param tamanos tamaño de cada partición (misma posición que en inicios)
      */
@@ -1668,9 +1710,15 @@ public class VentanaPrincipal extends JFrame {
         this.tamanoParticiones = tamanos;
         recalcularColoresParticion();
         tablaMemoria.repaint();
+
+        // sin particiones: la memoria virtual tampoco lleva colores
+        if (inicios == null || tamanos == null) {
+            coloresParticionVirtual.clear();
+            tablaVirtual.repaint();
+        }
     }
 
-    // pinta particiones fijas iguales: se calculan con inicio(i) = inicioUsuario + i * tamano
+    // pinta particiones fijas iguales (o marcos de paginación) en la RAM y en la memoria virtual
     public void actualizarColoresParticionIguales(int tamano) {
         int inicioUsuario = SystemConfig.getUserMemoryStart();
         int tamanoUsuario = SystemConfig.getMemorySize() - inicioUsuario;
@@ -1683,9 +1731,18 @@ public class VentanaPrincipal extends JFrame {
             tamanos[i] = tamano;
         }
         actualizarColoresParticion(inicios, tamanos);
+
+        // memoria virtual: misma cantidad de celdas por partición, pero cabe otra cantidad de particiones
+        int tamanoVirtual = SystemConfig.getDiskSize() - SystemConfig.getDiskMemoryVirtualStart();
+        int cantidadVirtual = tamanoVirtual / tamano;
+        int[] tamanosVirtual = new int[cantidadVirtual];
+        for (int i = 0; i < cantidadVirtual; i++) {
+            tamanosVirtual[i] = tamano;
+        }
+        recalcularColoresVirtual(tamanosVirtual);
     }
 
-    // pinta particiones fijas de tamaños diferentes: cada una empieza donde terminó la anterior
+    // pinta particiones fijas de tamaños diferentes en la RAM y en la memoria virtual
     public void actualizarColoresParticionDiferentes(int[] lista) {
         int inicio = SystemConfig.getUserMemoryStart();
         int[] inicios = new int[lista.length];
@@ -1694,6 +1751,34 @@ public class VentanaPrincipal extends JFrame {
             inicio = inicio + lista[i];
         }
         actualizarColoresParticion(inicios, lista); // lo que sobra al final queda gris
+
+        recalcularColoresVirtual(lista);
+    }
+
+    // calcula el color de cada dirección de la memoria virtual; las particiones que no caben completas quedan grises
+    private void recalcularColoresVirtual(int[] tamanos) {
+        coloresParticionVirtual.clear();
+        int inicioVirtual = SystemConfig.getDiskMemoryVirtualStart();
+        int finVirtual = SystemConfig.getDiskSize();
+
+        int dir = inicioVirtual;
+        for (int p = 0; p < tamanos.length; p++) {
+            if (dir + tamanos[p] > finVirtual) {
+                break; // igual que el Loader: si no cabe completa no se usa
+            }
+            Color color = generarColorParticionVirtual(p);
+            for (int i = dir; i < dir + tamanos[p]; i++) {
+                coloresParticionVirtual.put(i, color);
+            }
+            dir += tamanos[p];
+        }
+
+        // sobrante: lo que queda después de la última partición que cupo
+        for (int i = dir; i < finVirtual; i++) {
+            coloresParticionVirtual.put(i, GRIS_DESPERDICIO);
+        }
+
+        tablaVirtual.repaint();
     }
 
     // calcula el color de cada dirección de usuario según las particiones
@@ -1725,6 +1810,12 @@ public class VentanaPrincipal extends JFrame {
     private Color generarColorParticion(int numero) {
         // saltar el tono con la razón áurea deja colores bien separados entre particiones vecinas
         float tono = (numero * 0.618034f) % 1f;
+        return Color.getHSBColor(tono, 0.45f, 0.70f);
+    }
+
+    // igual que el de la RAM, pero arranca en otro tono para que no repita el mismo orden de colores
+    private Color generarColorParticionVirtual(int numero) {
+        float tono = (numero * 0.618034f + 0.5f) % 1f;
         return Color.getHSBColor(tono, 0.45f, 0.70f);
     }
 

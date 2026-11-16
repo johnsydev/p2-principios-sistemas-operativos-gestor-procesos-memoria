@@ -55,7 +55,7 @@ public class SystemConfig {
     public static final int PCB_SIZE = 22;
 
     public static final int FIRST_PROCESS_ID = 101;
-    public static final int MAX_PROCESSES_IN_MEMORY = 5;
+    public static final int MAX_PROCESSES_IN_CPU = 5;
 
     // PORCENTAJES
     public static final double MIN_KERNEL_MEMORY_PERCENTAGE = 0.25;

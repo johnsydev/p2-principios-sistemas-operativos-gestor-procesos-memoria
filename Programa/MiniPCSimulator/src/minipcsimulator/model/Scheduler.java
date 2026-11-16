@@ -52,14 +52,15 @@ public class Scheduler {
     public void checkAdmitJob() {
         boolean onlyMemVirtual = hayProcesosSuspendidos(); // antes: false
         while (jobList.hasPendingJobs()) {
-            if (processList.getProcessCount() >= SystemConfig.MAX_PROCESSES_IN_MEMORY) {
-                System.out.println("No se pueden admitir más procesos en memoria. Se alcanzó el límite máximo de procesos.");
-                return;
-            }
 
             Job job = jobList.getNextJob();
 
             if (job != null) {
+                // máximo 5 procesos por CPU
+                if (countProcessInCPU(job.getAssignedCpuId()) >= SystemConfig.MAX_PROCESSES_IN_CPU) {
+                    System.out.println("El CPU " + job.getAssignedCpuId() + " ya tiene el máximo de procesos. El job deberá esperar.");
+                    return;
+                }
 
                 int pcbStartAddress = -1;
                 int memoryStartAddress = -1;
@@ -151,6 +152,17 @@ public class Scheduler {
             }
         }
         return false;
+    }
+
+    // cuenta los procesos activos (RAM o virtual) asignados a un CPU
+    private int countProcessInCPU(int cpuId) {
+        int count = 0;
+        for (Process p : processList.getProcesses()) {
+            if (p.getAssignedCpuId() == cpuId) {
+                count++;
+            }
+        }
+        return count;
     }
 
     public void setSelfish(boolean selfish, double a, double b) {
