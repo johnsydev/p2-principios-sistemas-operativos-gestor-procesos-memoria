@@ -249,7 +249,7 @@ public class CPU {
 
         this.IR = memory.getInstruction(PC);
         this.currentInstructionAddress = this.PC;
-        this.PC++;
+        this.PC = logicalToPhysical(logical + 1);
     }
 
     /**

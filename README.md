@@ -1,7 +1,7 @@
 # Mini PC Simulator
 
 <p align="left">
-  <img src="https://res.cloudinary.com/dpuuo4mfh/image/upload/v1789428731/simulatorimgt1so2_r6cqry.png" width="1000" alt="Vista previa del simulador">
+  <img src="https://res.cloudinary.com/dpuuo4mfh/image/upload/v1794804752/proy2imdf_lekrr4.png" width="1000" alt="Vista previa del simulador">
 </p>
 
 ## Información del proyecto
@@ -17,7 +17,7 @@
 
 **Estado del proyecto:** 5 (Excelente)
 
-**Enlace del video:** [Ver en YouTube](https://youtu.be/PWzR9dX3KOQ)
+**Enlace del video:** [Ver en YouTube](https://youtu.be/CbT8n1COVtY)
 
 
 > [!IMPORTANT]
@@ -286,7 +286,7 @@ Se implementaron validaciones para evitar que un programa pueda saltar a una dir
 ## Diagrama de paquetes
 
 <p align="left">
-  <img src="https://res.cloudinary.com/dpuuo4mfh/image/upload/v1791374705/diagramapaquetes_pfwyaq.png" width="1000" alt="Diagrama de paquetes del proyecto">
+  <img src="https://res.cloudinary.com/dpuuo4mfh/image/upload/v1794804989/diagrama_paquetes_sscqlw.svg" width="1000" alt="Diagrama de paquetes del proyecto">
 </p>
 
 ---
@@ -349,6 +349,7 @@ p2-principios-sistemas-operativos-gestor-procesos-memoria/
         │       │   ├── SchedulingAlgorithm.java
         │       │   ├── SPNAlgorithm.java
         │       │   ├── SRTAlgorithm.java
+        │       │   ├── Stat.java
         │       │   └── SystemClock.java
         │       ├── services/
         │       │   ├── AsmParser.java
@@ -383,8 +384,9 @@ p2-principios-sistemas-operativos-gestor-procesos-memoria/
 | `Dispatcher.java` | Modelo | Encargado del cambio de contexto. Selecciona el siguiente proceso de la cola de un CPU según el algoritmo, le asigna el CPU y guarda el estado del proceso en su BCP. |
 | `Loader.java` | Modelo | Copia el código fuente traducido al Disco, crea su entrada en el Índice de Archivos y realiza la carga de instrucciones hacia la RAM o la Memoria Virtual según la estrategia de asignación seleccionada. |
 | `InterruptHandler.java` | Modelo | Atiende las interrupciones de software y de I/O (`INT 10H`, `INT 20H`, `INT 21H`), gestionando la salida en pantalla, la terminación de procesos y las llamadas al sistema de archivos. |
-| `FileSystem.java` | Modelo | Modela el sistema de archivos sobre el Disco simulado. Permite crear, abrir, escribir, leer y cerrar archivos mediante llamadas al sistema. |
+| `FileSystem.java` | Modelo | Modela el sistema de archivos sobre el Disco simulado. Permite crear, abrir, escribir, leer y eliminar archivos mediante llamadas al sistema. |
 | `FileIndex.java` | Modelo | Gestiona la tabla de metadatos del Disco (índice de archivos), registrando nombres, tamaños y direcciones iniciales de los archivos almacenados. |
+| `Stat.java` | Modelo | Guarda el resultado de una ejecución (configuración utilizada y estadísticas de cada proceso) para llevar el historial acumulado de ejecuciones. |
 | `SystemClock.java` | Modelo | Simula el reloj del sistema, incrementando los *ticks* de tiempo en cada ciclo para medir la duración de los procesos. |
 | `AsmParser.java` | Servicio | Analiza los archivos `.asm`, valida la sintaxis de las instrucciones tradicionales e interrupciones, verifica rangos y descarta líneas vacías. |
 | `FileManager.java` | Servicio | Administra la lectura y selección de múltiples archivos desde el sistema operativo anfitrión. |
@@ -469,7 +471,7 @@ Si la CPU encuentra una instrucción de interrupción (`INT`), delega la atenci�
 
 * **`INT 10H` (Salida en pantalla):** Muestra el valor almacenado en los registros directamente en la consola visual de la GUI, sin necesidad de presionar ENTER para continuar.
 * **`INT 20H` (Terminar programa):** Finaliza el proceso, libera su memoria, registra su tiempo final y marca su estado como `EXIT`.
-* **`INT 21H` (Sistema de Archivos):** Permite interactuar con el `FileSystem` para crear (`AH=3CH`), abrir (`AH=3DH`), escribir (`AH=40H`), leer (`AH=41H`) o cerrar (`AH=4DH`) archivos en el disco simulado.
+* **`INT 21H` (Sistema de Archivos):** Permite interactuar con el `FileSystem` para crear (`AH=3CH`), abrir (`AH=3DH`), escribir (`AH=40H`), eliminar (`AH=41H`) o leer (`AH=4DH`) archivos en el disco simulado. El contenido que se lee o escribe se guarda en `AL`.
 
 En este proyecto ya no se utiliza la interrupción de entrada desde el teclado.
 
@@ -561,7 +563,7 @@ Descartar las líneas vacías antes de guardar el programa evita reservar espaci
 
 El simulador representa el comportamiento de una arquitectura basada en un rango limitado de bits.
 
-Por esta razón, el sistema no bloquea por software una operación cuando el resultado sobrepasa el límite permitido, sino que permite que el valor se comporte según las limitaciones del desbordamiento físico. Esto permite observar cómo afecta el *overflow* a los registros durante las operaciones aritméticas.
+Por esta razón, los registros tienen rangos definidos: `AX` acepta valores entre 0 y 65535, y `AH` y `AL` entre 0 y 255. Los valores inmediatos de las instrucciones deben estar entre -127 y 127, lo cual se valida al cargar el programa. Si durante la ejecución una operación produce un valor fuera del rango de un registro, el registro conserva su valor anterior y se muestra un mensaje en la consola del programa, sin detener el proceso.
 
 ---
 
@@ -630,4 +632,4 @@ La posibilidad de observar en tiempo real cómo cada núcleo ejecuta sus proceso
 
 ---
 
-*JohnsyDev, 2026*
+*JohnsyDev & Sermonbadi, 2026*
