@@ -760,10 +760,7 @@ public class MiniPCController {
         vista.setModoAutomatico(true);
         
         new Thread(() -> {
-            boolean running = true;
-            boolean loaded = false;
-
-            while (running) {
+            while (autoExecute) {
 
                 javax.swing.SwingUtilities.invokeLater(() -> {
                     if (autoExecute) {
@@ -959,6 +956,7 @@ public class MiniPCController {
         this.cpu = this.cpus.get(0);
 
         this.arrivalQueue = new ArrivalQueue();
+        this.simulationStarted = false;
 
         Loader.resetNextFitIndex();
 
@@ -973,6 +971,7 @@ public class MiniPCController {
     private void reiniciarSistema() {
         systemClock.reset();
         this.autoExecute = false;
+        this.simulationStarted = false;
         this.memory = null; //sacamos memoria vieja
         this.disk = null; //sacamos disco viejo
         this.cpu = null; //sacamos cpu vieja
